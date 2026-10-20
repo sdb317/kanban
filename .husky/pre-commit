@@ -2,6 +2,12 @@
 
 STAGED_FILES=$(git diff --cached --name-only)
 
+# If there is NO staged file that isn't markdown, it's a docs-only commit
+if ! printf '%s\n' "$STAGED" | grep -qviE '\.(md|mdx|markdown)$'; then
+  echo "📝 Docs-only commit detected — skipping pre-commit checks."
+  exit 0
+fi
+
 echo "Running biome check on staged files..."
 npx biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true
 if [ $? -ne 0 ]; then
