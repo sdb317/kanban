@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { prepareAgentLaunch } from "../../../src/terminal/agent-session-adapters";
+import { expectedShellCommandLine } from "../../utilities/shell-quote";
 
 const originalHome = process.env.HOME;
 const originalAppData = process.env.APPDATA;
@@ -106,11 +107,12 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(getCodexConfigOverrideValues(launch.args, "features.codex_hooks")).toEqual([]);
 		const hookTrustState = getCodexConfigOverrideValues(launch.args, "hooks.state");
 		expect(hookTrustState).toHaveLength(1);
-		expect(hookTrustState[0]).toContain('"/<session-flags>/config.toml:user_prompt_submit:0:0"');
-		expect(hookTrustState[0]).toContain('"/<session-flags>/config.toml:stop:0:0"');
-		expect(hookTrustState[0]).toContain('"/<session-flags>/config.toml:permission_request:0:0"');
-		expect(hookTrustState[0]).toContain('"/<session-flags>/config.toml:pre_tool_use:0:0"');
-		expect(hookTrustState[0]).toContain('"/<session-flags>/config.toml:post_tool_use:0:0"');
+		// Codex keys session-flag hooks by a synthetic config path that follows the host's path style.
+		const sessionFlagsSource =
+			process.platform === "win32" ? String.raw`C:\<session-flags>\config.toml` : "/<session-flags>/config.toml";
+		for (const eventLabel of ["user_prompt_submit", "stop", "permission_request", "pre_tool_use", "post_tool_use"]) {
+			expect(hookTrustState[0]).toContain(JSON.stringify(`${sessionFlagsSource}:${eventLabel}:0:0`));
+		}
 		expect(hookTrustState[0]).toContain('trusted_hash="sha256:');
 		expect(launchCommand).toContain("timeout=5");
 		expect(launchCommand).not.toContain("codex-wrapper");
@@ -136,7 +138,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(appendPromptIndex).toBeGreaterThanOrEqual(0);
 		expect(launch.args[appendPromptIndex + 1]).toContain("Kanban sidebar agent");
 		expect(launch.args[appendPromptIndex + 1]).toContain(
-			"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
+			`${expectedShellCommandLine("/usr/local/bin/node", "/Users/example/repo/dist/cli.js")} task create`,
 		);
 	});
 
@@ -154,8 +156,12 @@ describe("prepareAgentLaunch hook strategies", () => {
 
 		const developerInstructions = getCodexConfigOverrideValues(launch.args, "developer_instructions");
 		expect(developerInstructions).toHaveLength(1);
-		expect(developerInstructions[0]).toContain("Kanban sidebar agent");
-		expect(developerInstructions[0]).toContain("'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create");
+		// The override value is a JSON-encoded string literal; decode it before matching.
+		const decodedInstructions: unknown = JSON.parse(developerInstructions[0] ?? "");
+		expect(decodedInstructions).toContain("Kanban sidebar agent");
+		expect(decodedInstructions).toContain(
+			`${expectedShellCommandLine("/usr/local/bin/node", "/Users/example/repo/dist/cli.js")} task create`,
+		);
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["false"]);
 	});
 

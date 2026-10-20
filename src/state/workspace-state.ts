@@ -4,7 +4,7 @@ import { readFile, realpath, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { z } from "zod";
-
+import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
 import {
 	type RuntimeBoardColumnId,
 	type RuntimeBoardData,
@@ -19,6 +19,16 @@ import {
 import { createGitProcessEnv } from "../core/git-process-env";
 import { updateTaskDependencies } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
+
+// Compact per-column card counts so state-change logs capture the shape of a
+// board transition without serializing the entire board.
+function summarizeBoard(board: RuntimeBoardData): Record<string, number> {
+	const counts: Record<string, number> = {};
+	for (const column of board.columns) {
+		counts[column.id] = column.cards.length;
+	}
+	return counts;
+}
 
 const RUNTIME_HOME_PARENT_DIR = ".cline";
 const RUNTIME_HOME_DIR = "kanban";
@@ -649,6 +659,7 @@ export async function saveWorkspaceState(
 	cwd: string,
 	payload: RuntimeWorkspaceStateSaveRequest,
 ): Promise<RuntimeWorkspaceStateResponse> {
+	const logger = getKanbanRuntimeLogger();
 	const parsedPayload = parseWorkspaceStateSavePayload(payload);
 	const context = await loadWorkspaceContext(cwd);
 	return await lockedFileSystem.withLock(getWorkspaceDirectoryLockRequest(context.workspaceId), async () => {
@@ -661,6 +672,12 @@ export async function saveWorkspaceState(
 			expectedRevision >= 0 &&
 			expectedRevision !== currentMeta.revision
 		) {
+			logger.log("workspace.saveState.conflict", {
+				severity: "warn",
+				workspaceId: context.workspaceId,
+				expectedRevision,
+				currentRevision: currentMeta.revision,
+			});
 			throw new WorkspaceStateConflictError(expectedRevision, currentMeta.revision);
 		}
 		const board = parsedPayload.board;
@@ -681,6 +698,12 @@ export async function saveWorkspaceState(
 			lock: null,
 		});
 
+		logger.log("workspace.saveState", {
+			workspaceId: context.workspaceId,
+			fromRevision: currentMeta.revision,
+			toRevision: nextRevision,
+			board: summarizeBoard(board),
+		});
 		return toWorkspaceStateResponse(context, board, sessions, nextRevision);
 	});
 }
@@ -702,6 +725,7 @@ export async function mutateWorkspaceState<T>(
 	cwd: string,
 	mutate: (state: RuntimeWorkspaceStateResponse) => RuntimeWorkspaceAtomicMutationResult<T>,
 ): Promise<RuntimeWorkspaceAtomicMutationResponse<T>> {
+	const logger = getKanbanRuntimeLogger();
 	const context = await loadWorkspaceContext(cwd);
 	return await lockedFileSystem.withLock(getWorkspaceDirectoryLockRequest(context.workspaceId), async () => {
 		const currentBoard = await readWorkspaceBoard(context.workspaceId);
@@ -711,6 +735,10 @@ export async function mutateWorkspaceState<T>(
 
 		const mutation = mutate(currentState);
 		if (mutation.save === false) {
+			logger.debug("workspace.mutate.noop", {
+				workspaceId: context.workspaceId,
+				revision: currentMeta.revision,
+			});
 			return {
 				value: mutation.value,
 				state: currentState,
@@ -736,6 +764,12 @@ export async function mutateWorkspaceState<T>(
 			lock: null,
 		});
 
+		logger.log("workspace.mutate", {
+			workspaceId: context.workspaceId,
+			fromRevision: currentMeta.revision,
+			toRevision: nextRevision,
+			board: summarizeBoard(nextBoard),
+		});
 		return {
 			value: mutation.value,
 			state: toWorkspaceStateResponse(context, nextBoard, nextSessions, nextRevision),

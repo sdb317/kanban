@@ -6,35 +6,36 @@ import { join } from "node:path";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import { handleClineMcpOauthCallback } from "../cline-sdk/cline-mcp-runtime-service";
 import {
-	type ClineTaskSessionService,
-	createInMemoryClineTaskSessionService,
+    type ClineTaskSessionService,
+    createInMemoryClineTaskSessionService,
 } from "../cline-sdk/cline-task-session-service";
 import { createClineWatcherRegistry } from "../cline-sdk/cline-watcher-registry";
+import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
 import type {
-	RuntimeCommandRunResponse,
-	RuntimeRunUpdateResponse,
-	RuntimeUpdateStatusResponse,
-	RuntimeWorkspaceStateResponse,
+    RuntimeCommandRunResponse,
+    RuntimeRunUpdateResponse,
+    RuntimeUpdateStatusResponse,
+    RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import {
-	buildKanbanRuntimeUrl,
-	getKanbanRuntimeHost,
-	getKanbanRuntimeOrigin,
-	getKanbanRuntimePort,
-	getKanbanRuntimeTls,
-	isKanbanRemoteHost,
+    buildKanbanRuntimeUrl,
+    getKanbanRuntimeHost,
+    getKanbanRuntimeOrigin,
+    getKanbanRuntimePort,
+    getKanbanRuntimeTls,
+    isKanbanRemoteHost,
 } from "../core/runtime-endpoint";
 import {
-	checkRateLimit,
-	clearRateLimit,
-	extractBearerToken,
-	extractSessionTokenFromCookie,
-	isPasscodeEnabled,
-	issueSession,
-	recordFailedAttempt,
-	validateInternalToken,
-	validatePasscode,
-	validateSession,
+    checkRateLimit,
+    clearRateLimit,
+    extractBearerToken,
+    extractSessionTokenFromCookie,
+    isPasscodeEnabled,
+    issueSession,
+    recordFailedAttempt,
+    validateInternalToken,
+    validatePasscode,
+    validateSession,
 } from "../security/passcode-manager";
 import { loadWorkspaceContextById } from "../state/workspace-state";
 import type { TerminalSessionManager } from "../terminal/session-manager";
@@ -493,9 +494,21 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 		? buildKanbanRuntimeUrl(`/${encodeURIComponent(activeWorkspaceId)}`)
 		: getKanbanRuntimeOrigin();
 
+	const logger = getKanbanRuntimeLogger();
+	logger.log("runtime.server.started", {
+		url,
+		host: getKanbanRuntimeHost(),
+		port: getKanbanRuntimePort(),
+		remoteMode: isRemoteMode,
+		activeWorkspaceId: activeWorkspaceId ?? null,
+	});
+
 	return {
 		url,
 		close: async () => {
+			logger.log("runtime.server.closing", {
+				clineTaskSessionServices: clineTaskSessionServiceByWorkspaceId.size,
+			});
 			await Promise.all(
 				Array.from(clineTaskSessionServiceByWorkspaceId.values()).map(async (service) => {
 					await service.dispose();
@@ -514,6 +527,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 					resolveClose();
 				});
 			});
+			logger.log("runtime.server.closed", {});
 		},
 	};
 }

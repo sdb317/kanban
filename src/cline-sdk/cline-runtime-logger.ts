@@ -54,9 +54,24 @@ function writeLogLine(level: LogLevel, message: string, metadata?: Record<string
 	}
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function logToConsole(_level: LogLevel, _message: string, _metadata?: Record<string, unknown>): void {
-	// Console logging intentionally disabled; re-enable by routing to console.debug/info/warn/error.
+const CONSOLE_METHOD: Record<LogLevel, (...args: unknown[]) => void> = {
+	debug: console.debug,
+	info: console.info,
+	warn: console.warn,
+	error: console.error,
+};
+
+function logToConsole(level: LogLevel, message: string, metadata?: Record<string, unknown>): void {
+	// Gated by the same CLINE_LOG_ENABLED master switch as file logging.
+	if (!isLoggingEnabled()) {
+		return;
+	}
+	const prefix = `[cline:${level}]`;
+	if (metadata) {
+		CONSOLE_METHOD[level](prefix, message, metadata);
+	} else {
+		CONSOLE_METHOD[level](prefix, message);
+	}
 }
 
 export function createKanbanClineLogger(bindings?: Record<string, unknown>): BasicLogger {
@@ -89,4 +104,23 @@ export function createKanbanClineLogger(bindings?: Record<string, unknown>): Bas
 		},
 		error: (message: string, metadata?: Record<string, unknown>) => emit("error", message, metadata),
 	};
+}
+
+// Shared process-wide runtime logger. Prefer this over ad-hoc
+// createKanbanClineLogger() calls for server/trpc/state instrumentation so all
+// runtime logs share one configuration and honor the CLINE_LOG_ENABLED switch.
+let sharedRuntimeLogger: BasicLogger | null = null;
+
+export function getKanbanRuntimeLogger(): BasicLogger {
+	if (!sharedRuntimeLogger) {
+		sharedRuntimeLogger = createKanbanClineLogger({ runtime: "kanban" });
+	}
+	return sharedRuntimeLogger;
+}
+
+// Create a logger that merges the shared runtime bindings with caller-provided
+// context (e.g. workspaceId, component). Useful for per-request/per-workspace
+// scoping while keeping a single logging pipeline.
+export function createScopedRuntimeLogger(bindings: Record<string, unknown>): BasicLogger {
+	return createKanbanClineLogger({ runtime: "kanban", ...bindings });
 }

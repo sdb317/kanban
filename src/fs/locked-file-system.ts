@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { getSystemErrorName } from "node:util";
 import type { LockOptions } from "proper-lockfile";
 import * as lockfile from "proper-lockfile";
+import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger.js";
 
 const DEFAULT_LOCK_STALE_MS = 10_000;
 const DEFAULT_LOCK_RETRIES: NonNullable<LockOptions["retries"]> = {
@@ -44,17 +46,66 @@ export interface AtomicTextWriteOptions {
 	executable?: boolean;
 }
 
+const RELEASE_RACE_SYSCALLS: ReadonlySet<string> = new Set(["utime", "utimes", "stat"]);
+
+interface CompromisedLockErrorShape {
+	code?: unknown;
+	syscall?: unknown;
+	errno?: unknown;
+	message?: unknown;
+}
+
+function isEnoentErrno(errno: unknown): boolean {
+	if (typeof errno !== "number" || !Number.isInteger(errno) || errno >= 0) {
+		return false;
+	}
+	try {
+		// Platform-correct: -2 on POSIX, -4058 (UV_ENOENT) on Windows.
+		return getSystemErrorName(errno) === "ENOENT";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * proper-lockfile's refresh timer can run `stat`/`utimes` against the lock file
+ * after our own release already removed it. The library reassigns `code` to
+ * ECOMPROMISED on the original ENOENT error, preserving syscall/errno/message,
+ * which is the signature we use to recognize this benign race.
+ */
+function isReleaseRaceCompromise(error: unknown): boolean {
+	if (typeof error !== "object" || error === null) {
+		return false;
+	}
+	const { code, syscall, errno, message } = error as CompromisedLockErrorShape;
+	if (code !== "ECOMPROMISED" || typeof syscall !== "string" || !RELEASE_RACE_SYSCALLS.has(syscall)) {
+		return false;
+	}
+	return isEnoentErrno(errno) || (typeof message === "string" && /\bENOENT\b/.test(message));
+}
+
+function defaultOnCompromised(error: Error): void {
+	if (isReleaseRaceCompromise(error)) {
+		const { syscall, path } = error as Error & { syscall?: string; path?: string };
+		getKanbanRuntimeLogger().debug("locked-fs.compromise.release-race-tolerated", {
+			syscall,
+			path,
+			message: error.message,
+		});
+		return;
+	}
+	// Genuine compromise: preserve proper-lockfile's default surfacing.
+	throw error;
+}
+
 function createLockOptions(request: LockRequest, lockfilePath: string): LockOptions {
-	const options: LockOptions = {
+	return {
 		stale: request.staleMs ?? DEFAULT_LOCK_STALE_MS,
 		retries: request.retries ?? DEFAULT_LOCK_RETRIES,
 		realpath: false,
 		lockfilePath,
+		onCompromised: request.onCompromised ?? defaultOnCompromised,
 	};
-	if (typeof request.onCompromised === "function") {
-		options.onCompromised = request.onCompromised;
-	}
-	return options;
 }
 
 async function readFileIfExists(path: string): Promise<string | null> {

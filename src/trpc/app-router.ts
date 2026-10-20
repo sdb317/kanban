@@ -6,187 +6,188 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import type {
-	RuntimeClineAccountBalanceResponse,
-	RuntimeClineAccountOrganizationsResponse,
-	RuntimeClineAccountProfileResponse,
-	RuntimeClineAccountSwitchRequest,
-	RuntimeClineAccountSwitchResponse,
-	RuntimeClineAddProviderRequest,
-	RuntimeClineAddProviderResponse,
-	RuntimeClineDeviceAuthCompleteRequest,
-	RuntimeClineDeviceAuthCompleteResponse,
-	RuntimeClineDeviceAuthStartResponse,
-	RuntimeClineKanbanAccessResponse,
-	RuntimeClineMcpAuthStatusResponse,
-	RuntimeClineMcpOAuthRequest,
-	RuntimeClineMcpOAuthResponse,
-	RuntimeClineMcpSettingsResponse,
-	RuntimeClineMcpSettingsSaveRequest,
-	RuntimeClineMcpSettingsSaveResponse,
-	RuntimeClineOauthLoginRequest,
-	RuntimeClineOauthLoginResponse,
-	RuntimeClineProviderCatalogResponse,
-	RuntimeClineProviderModelsRequest,
-	RuntimeClineProviderModelsResponse,
-	RuntimeClineProviderSettingsSaveRequest,
-	RuntimeClineProviderSettingsSaveResponse,
-	RuntimeClineUpdateProviderRequest,
-	RuntimeClineUpdateProviderResponse,
-	RuntimeCommandRunRequest,
-	RuntimeCommandRunResponse,
-	RuntimeConfigResponse,
-	RuntimeConfigSaveRequest,
-	RuntimeDebugResetAllStateResponse,
-	RuntimeDirectoryListRequest,
-	RuntimeDirectoryListResponse,
-	RuntimeFeaturebaseTokenResponse,
-	RuntimeGitCheckoutRequest,
-	RuntimeGitCheckoutResponse,
-	RuntimeGitCommitDiffRequest,
-	RuntimeGitCommitDiffResponse,
-	RuntimeGitDiscardResponse,
-	RuntimeGitLogRequest,
-	RuntimeGitLogResponse,
-	RuntimeGitRefsResponse,
-	RuntimeGitSummaryResponse,
-	RuntimeGitSyncAction,
-	RuntimeGitSyncResponse,
-	RuntimeHookIngestRequest,
-	RuntimeHookIngestResponse,
-	RuntimeOpenFileRequest,
-	RuntimeOpenFileResponse,
-	RuntimeProjectAddRequest,
-	RuntimeProjectAddResponse,
-	RuntimeProjectDirectoryPickerResponse,
-	RuntimeProjectRemoveRequest,
-	RuntimeProjectRemoveResponse,
-	RuntimeProjectsResponse,
-	RuntimeRunUpdateResponse,
-	RuntimeShellSessionStartRequest,
-	RuntimeShellSessionStartResponse,
-	RuntimeSlashCommandsResponse,
-	RuntimeTaskChatAbortRequest,
-	RuntimeTaskChatAbortResponse,
-	RuntimeTaskChatCancelRequest,
-	RuntimeTaskChatCancelResponse,
-	RuntimeTaskChatMessagesRequest,
-	RuntimeTaskChatMessagesResponse,
-	RuntimeTaskChatReloadRequest,
-	RuntimeTaskChatReloadResponse,
-	RuntimeTaskChatSendRequest,
-	RuntimeTaskChatSendResponse,
-	RuntimeTaskSessionInputRequest,
-	RuntimeTaskSessionInputResponse,
-	RuntimeTaskSessionStartRequest,
-	RuntimeTaskSessionStartResponse,
-	RuntimeTaskSessionStopRequest,
-	RuntimeTaskSessionStopResponse,
-	RuntimeTaskWorkspaceInfoRequest,
-	RuntimeTaskWorkspaceInfoResponse,
-	RuntimeUpdateStatusResponse,
-	RuntimeWorkspaceChangesRequest,
-	RuntimeWorkspaceChangesResponse,
-	RuntimeWorkspaceFileSearchRequest,
-	RuntimeWorkspaceFileSearchResponse,
-	RuntimeWorkspaceStateNotifyResponse,
-	RuntimeWorkspaceStateResponse,
-	RuntimeWorkspaceStateSaveRequest,
-	RuntimeWorktreeDeleteRequest,
-	RuntimeWorktreeDeleteResponse,
-	RuntimeWorktreeEnsureRequest,
-	RuntimeWorktreeEnsureResponse,
+    RuntimeClineAccountBalanceResponse,
+    RuntimeClineAccountOrganizationsResponse,
+    RuntimeClineAccountProfileResponse,
+    RuntimeClineAccountSwitchRequest,
+    RuntimeClineAccountSwitchResponse,
+    RuntimeClineAddProviderRequest,
+    RuntimeClineAddProviderResponse,
+    RuntimeClineDeviceAuthCompleteRequest,
+    RuntimeClineDeviceAuthCompleteResponse,
+    RuntimeClineDeviceAuthStartResponse,
+    RuntimeClineKanbanAccessResponse,
+    RuntimeClineMcpAuthStatusResponse,
+    RuntimeClineMcpOAuthRequest,
+    RuntimeClineMcpOAuthResponse,
+    RuntimeClineMcpSettingsResponse,
+    RuntimeClineMcpSettingsSaveRequest,
+    RuntimeClineMcpSettingsSaveResponse,
+    RuntimeClineOauthLoginRequest,
+    RuntimeClineOauthLoginResponse,
+    RuntimeClineProviderCatalogResponse,
+    RuntimeClineProviderModelsRequest,
+    RuntimeClineProviderModelsResponse,
+    RuntimeClineProviderSettingsSaveRequest,
+    RuntimeClineProviderSettingsSaveResponse,
+    RuntimeClineUpdateProviderRequest,
+    RuntimeClineUpdateProviderResponse,
+    RuntimeCommandRunRequest,
+    RuntimeCommandRunResponse,
+    RuntimeConfigResponse,
+    RuntimeConfigSaveRequest,
+    RuntimeDebugResetAllStateResponse,
+    RuntimeDirectoryListRequest,
+    RuntimeDirectoryListResponse,
+    RuntimeFeaturebaseTokenResponse,
+    RuntimeGitCheckoutRequest,
+    RuntimeGitCheckoutResponse,
+    RuntimeGitCommitDiffRequest,
+    RuntimeGitCommitDiffResponse,
+    RuntimeGitDiscardResponse,
+    RuntimeGitLogRequest,
+    RuntimeGitLogResponse,
+    RuntimeGitRefsResponse,
+    RuntimeGitSummaryResponse,
+    RuntimeGitSyncAction,
+    RuntimeGitSyncResponse,
+    RuntimeHookIngestRequest,
+    RuntimeHookIngestResponse,
+    RuntimeOpenFileRequest,
+    RuntimeOpenFileResponse,
+    RuntimeProjectAddRequest,
+    RuntimeProjectAddResponse,
+    RuntimeProjectDirectoryPickerResponse,
+    RuntimeProjectRemoveRequest,
+    RuntimeProjectRemoveResponse,
+    RuntimeProjectsResponse,
+    RuntimeRunUpdateResponse,
+    RuntimeShellSessionStartRequest,
+    RuntimeShellSessionStartResponse,
+    RuntimeSlashCommandsResponse,
+    RuntimeTaskChatAbortRequest,
+    RuntimeTaskChatAbortResponse,
+    RuntimeTaskChatCancelRequest,
+    RuntimeTaskChatCancelResponse,
+    RuntimeTaskChatMessagesRequest,
+    RuntimeTaskChatMessagesResponse,
+    RuntimeTaskChatReloadRequest,
+    RuntimeTaskChatReloadResponse,
+    RuntimeTaskChatSendRequest,
+    RuntimeTaskChatSendResponse,
+    RuntimeTaskSessionInputRequest,
+    RuntimeTaskSessionInputResponse,
+    RuntimeTaskSessionStartRequest,
+    RuntimeTaskSessionStartResponse,
+    RuntimeTaskSessionStopRequest,
+    RuntimeTaskSessionStopResponse,
+    RuntimeTaskWorkspaceInfoRequest,
+    RuntimeTaskWorkspaceInfoResponse,
+    RuntimeUpdateStatusResponse,
+    RuntimeWorkspaceChangesRequest,
+    RuntimeWorkspaceChangesResponse,
+    RuntimeWorkspaceFileSearchRequest,
+    RuntimeWorkspaceFileSearchResponse,
+    RuntimeWorkspaceStateNotifyResponse,
+    RuntimeWorkspaceStateResponse,
+    RuntimeWorkspaceStateSaveRequest,
+    RuntimeWorktreeDeleteRequest,
+    RuntimeWorktreeDeleteResponse,
+    RuntimeWorktreeEnsureRequest,
+    RuntimeWorktreeEnsureResponse,
 } from "../core/api-contract";
 import {
-	runtimeClineAccountBalanceResponseSchema,
-	runtimeClineAccountOrganizationsResponseSchema,
-	runtimeClineAccountProfileResponseSchema,
-	runtimeClineAccountSwitchRequestSchema,
-	runtimeClineAccountSwitchResponseSchema,
-	runtimeClineAddProviderRequestSchema,
-	runtimeClineAddProviderResponseSchema,
-	runtimeClineDeviceAuthCompleteRequestSchema,
-	runtimeClineDeviceAuthCompleteResponseSchema,
-	runtimeClineDeviceAuthStartResponseSchema,
-	runtimeClineKanbanAccessResponseSchema,
-	runtimeClineMcpAuthStatusResponseSchema,
-	runtimeClineMcpOAuthRequestSchema,
-	runtimeClineMcpOAuthResponseSchema,
-	runtimeClineMcpSettingsResponseSchema,
-	runtimeClineMcpSettingsSaveRequestSchema,
-	runtimeClineMcpSettingsSaveResponseSchema,
-	runtimeClineOauthLoginRequestSchema,
-	runtimeClineOauthLoginResponseSchema,
-	runtimeClineProviderCatalogResponseSchema,
-	runtimeClineProviderModelsRequestSchema,
-	runtimeClineProviderModelsResponseSchema,
-	runtimeClineProviderSettingsSaveRequestSchema,
-	runtimeClineProviderSettingsSaveResponseSchema,
-	runtimeClineUpdateProviderRequestSchema,
-	runtimeClineUpdateProviderResponseSchema,
-	runtimeCommandRunRequestSchema,
-	runtimeCommandRunResponseSchema,
-	runtimeConfigResponseSchema,
-	runtimeConfigSaveRequestSchema,
-	runtimeDebugResetAllStateResponseSchema,
-	runtimeDirectoryListRequestSchema,
-	runtimeDirectoryListResponseSchema,
-	runtimeFeaturebaseTokenResponseSchema,
-	runtimeGitCheckoutRequestSchema,
-	runtimeGitCheckoutResponseSchema,
-	runtimeGitCommitDiffRequestSchema,
-	runtimeGitCommitDiffResponseSchema,
-	runtimeGitDiscardResponseSchema,
-	runtimeGitLogRequestSchema,
-	runtimeGitLogResponseSchema,
-	runtimeGitRefsResponseSchema,
-	runtimeGitSummaryResponseSchema,
-	runtimeGitSyncActionSchema,
-	runtimeGitSyncResponseSchema,
-	runtimeHookIngestRequestSchema,
-	runtimeHookIngestResponseSchema,
-	runtimeOpenFileRequestSchema,
-	runtimeOpenFileResponseSchema,
-	runtimeProjectAddRequestSchema,
-	runtimeProjectAddResponseSchema,
-	runtimeProjectDirectoryPickerResponseSchema,
-	runtimeProjectRemoveRequestSchema,
-	runtimeProjectRemoveResponseSchema,
-	runtimeProjectsResponseSchema,
-	runtimeRunUpdateResponseSchema,
-	runtimeShellSessionStartRequestSchema,
-	runtimeShellSessionStartResponseSchema,
-	runtimeSlashCommandsResponseSchema,
-	runtimeTaskChatAbortRequestSchema,
-	runtimeTaskChatAbortResponseSchema,
-	runtimeTaskChatCancelRequestSchema,
-	runtimeTaskChatCancelResponseSchema,
-	runtimeTaskChatMessagesRequestSchema,
-	runtimeTaskChatMessagesResponseSchema,
-	runtimeTaskChatReloadRequestSchema,
-	runtimeTaskChatReloadResponseSchema,
-	runtimeTaskChatSendRequestSchema,
-	runtimeTaskChatSendResponseSchema,
-	runtimeTaskSessionInputRequestSchema,
-	runtimeTaskSessionInputResponseSchema,
-	runtimeTaskSessionStartRequestSchema,
-	runtimeTaskSessionStartResponseSchema,
-	runtimeTaskSessionStopRequestSchema,
-	runtimeTaskSessionStopResponseSchema,
-	runtimeTaskWorkspaceInfoRequestSchema,
-	runtimeTaskWorkspaceInfoResponseSchema,
-	runtimeUpdateStatusResponseSchema,
-	runtimeWorkspaceChangesRequestSchema,
-	runtimeWorkspaceChangesResponseSchema,
-	runtimeWorkspaceFileSearchRequestSchema,
-	runtimeWorkspaceFileSearchResponseSchema,
-	runtimeWorkspaceStateNotifyResponseSchema,
-	runtimeWorkspaceStateResponseSchema,
-	runtimeWorkspaceStateSaveRequestSchema,
-	runtimeWorktreeDeleteRequestSchema,
-	runtimeWorktreeDeleteResponseSchema,
-	runtimeWorktreeEnsureRequestSchema,
-	runtimeWorktreeEnsureResponseSchema,
+    runtimeClineAccountBalanceResponseSchema,
+    runtimeClineAccountOrganizationsResponseSchema,
+    runtimeClineAccountProfileResponseSchema,
+    runtimeClineAccountSwitchRequestSchema,
+    runtimeClineAccountSwitchResponseSchema,
+    runtimeClineAddProviderRequestSchema,
+    runtimeClineAddProviderResponseSchema,
+    runtimeClineDeviceAuthCompleteRequestSchema,
+    runtimeClineDeviceAuthCompleteResponseSchema,
+    runtimeClineDeviceAuthStartResponseSchema,
+    runtimeClineKanbanAccessResponseSchema,
+    runtimeClineMcpAuthStatusResponseSchema,
+    runtimeClineMcpOAuthRequestSchema,
+    runtimeClineMcpOAuthResponseSchema,
+    runtimeClineMcpSettingsResponseSchema,
+    runtimeClineMcpSettingsSaveRequestSchema,
+    runtimeClineMcpSettingsSaveResponseSchema,
+    runtimeClineOauthLoginRequestSchema,
+    runtimeClineOauthLoginResponseSchema,
+    runtimeClineProviderCatalogResponseSchema,
+    runtimeClineProviderModelsRequestSchema,
+    runtimeClineProviderModelsResponseSchema,
+    runtimeClineProviderSettingsSaveRequestSchema,
+    runtimeClineProviderSettingsSaveResponseSchema,
+    runtimeClineUpdateProviderRequestSchema,
+    runtimeClineUpdateProviderResponseSchema,
+    runtimeCommandRunRequestSchema,
+    runtimeCommandRunResponseSchema,
+    runtimeConfigResponseSchema,
+    runtimeConfigSaveRequestSchema,
+    runtimeDebugResetAllStateResponseSchema,
+    runtimeDirectoryListRequestSchema,
+    runtimeDirectoryListResponseSchema,
+    runtimeFeaturebaseTokenResponseSchema,
+    runtimeGitCheckoutRequestSchema,
+    runtimeGitCheckoutResponseSchema,
+    runtimeGitCommitDiffRequestSchema,
+    runtimeGitCommitDiffResponseSchema,
+    runtimeGitDiscardResponseSchema,
+    runtimeGitLogRequestSchema,
+    runtimeGitLogResponseSchema,
+    runtimeGitRefsResponseSchema,
+    runtimeGitSummaryResponseSchema,
+    runtimeGitSyncActionSchema,
+    runtimeGitSyncResponseSchema,
+    runtimeHookIngestRequestSchema,
+    runtimeHookIngestResponseSchema,
+    runtimeOpenFileRequestSchema,
+    runtimeOpenFileResponseSchema,
+    runtimeProjectAddRequestSchema,
+    runtimeProjectAddResponseSchema,
+    runtimeProjectDirectoryPickerResponseSchema,
+    runtimeProjectRemoveRequestSchema,
+    runtimeProjectRemoveResponseSchema,
+    runtimeProjectsResponseSchema,
+    runtimeRunUpdateResponseSchema,
+    runtimeShellSessionStartRequestSchema,
+    runtimeShellSessionStartResponseSchema,
+    runtimeSlashCommandsResponseSchema,
+    runtimeTaskChatAbortRequestSchema,
+    runtimeTaskChatAbortResponseSchema,
+    runtimeTaskChatCancelRequestSchema,
+    runtimeTaskChatCancelResponseSchema,
+    runtimeTaskChatMessagesRequestSchema,
+    runtimeTaskChatMessagesResponseSchema,
+    runtimeTaskChatReloadRequestSchema,
+    runtimeTaskChatReloadResponseSchema,
+    runtimeTaskChatSendRequestSchema,
+    runtimeTaskChatSendResponseSchema,
+    runtimeTaskSessionInputRequestSchema,
+    runtimeTaskSessionInputResponseSchema,
+    runtimeTaskSessionStartRequestSchema,
+    runtimeTaskSessionStartResponseSchema,
+    runtimeTaskSessionStopRequestSchema,
+    runtimeTaskSessionStopResponseSchema,
+    runtimeTaskWorkspaceInfoRequestSchema,
+    runtimeTaskWorkspaceInfoResponseSchema,
+    runtimeUpdateStatusResponseSchema,
+    runtimeWorkspaceChangesRequestSchema,
+    runtimeWorkspaceChangesResponseSchema,
+    runtimeWorkspaceFileSearchRequestSchema,
+    runtimeWorkspaceFileSearchResponseSchema,
+    runtimeWorkspaceStateNotifyResponseSchema,
+    runtimeWorkspaceStateResponseSchema,
+    runtimeWorkspaceStateSaveRequestSchema,
+    runtimeWorktreeDeleteRequestSchema,
+    runtimeWorktreeDeleteResponseSchema,
+    runtimeWorktreeEnsureRequestSchema,
+    runtimeWorktreeEnsureResponseSchema,
 } from "../core/api-contract";
+import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
 
 export interface RuntimeTrpcWorkspaceScope {
 	workspaceId: string;
@@ -400,7 +401,30 @@ const t = initTRPC.context<RuntimeTrpcContext>().create({
 	},
 });
 
-const workspaceProcedure = t.procedure.use(({ ctx, next }) => {
+// Central chokepoint: every tRPC query/mutation (i.e. every user interaction
+// coming from the web UI or CLI client) flows through this middleware. Gated by
+// CLINE_LOG_ENABLED inside the logger, so this is a no-op unless logging is on.
+const loggedProcedure = t.procedure.use(async ({ path, type, next }) => {
+	const logger = getKanbanRuntimeLogger();
+	const startedAt = Date.now();
+	logger.debug("trpc.call.start", { path, type });
+	const result = await next();
+	const durationMs = Date.now() - startedAt;
+	if (result.ok) {
+		logger.debug("trpc.call.ok", { path, type, durationMs });
+	} else {
+		logger.error?.("trpc.call.error", {
+			path,
+			type,
+			durationMs,
+			code: result.error.code,
+			message: result.error.message,
+		});
+	}
+	return result;
+});
+
+const workspaceProcedure = loggedProcedure.use(({ ctx, next }) => {
 	if (!ctx.requestedWorkspaceId) {
 		throw new TRPCError({
 			code: "BAD_REQUEST",
@@ -428,28 +452,28 @@ const gitSyncActionInputSchema = z.object({
 
 export const runtimeAppRouter = t.router({
 	runtime: t.router({
-		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
+		getConfig: loggedProcedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.loadConfig(ctx.workspaceScope);
 		}),
-		saveConfig: t.procedure
+		saveConfig: loggedProcedure
 			.input(runtimeConfigSaveRequestSchema)
 			.output(runtimeConfigResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.saveConfig(ctx.workspaceScope, input);
 			}),
-		saveClineProviderSettings: t.procedure
+		saveClineProviderSettings: loggedProcedure
 			.input(runtimeClineProviderSettingsSaveRequestSchema)
 			.output(runtimeClineProviderSettingsSaveResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.saveClineProviderSettings(ctx.workspaceScope, input);
 			}),
-		addClineProvider: t.procedure
+		addClineProvider: loggedProcedure
 			.input(runtimeClineAddProviderRequestSchema)
 			.output(runtimeClineAddProviderResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.addClineProvider(ctx.workspaceScope, input);
 			}),
-		updateClineProvider: t.procedure
+		updateClineProvider: loggedProcedure
 			.input(runtimeClineUpdateProviderRequestSchema)
 			.output(runtimeClineUpdateProviderResponseSchema)
 			.mutation(async ({ ctx, input }) => {
@@ -479,7 +503,7 @@ export const runtimeAppRouter = t.router({
 			.query(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.getTaskChatMessages(ctx.workspaceScope, input);
 			}),
-		getClineSlashCommands: t.procedure.output(runtimeSlashCommandsResponseSchema).query(async ({ ctx }) => {
+		getClineSlashCommands: loggedProcedure.output(runtimeSlashCommandsResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineSlashCommands(ctx.workspaceScope);
 		}),
 		reloadTaskChatSession: workspaceProcedure
@@ -506,66 +530,66 @@ export const runtimeAppRouter = t.router({
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.cancelTaskChatTurn(ctx.workspaceScope, input);
 			}),
-		getClineProviderCatalog: t.procedure.output(runtimeClineProviderCatalogResponseSchema).query(async ({ ctx }) => {
+		getClineProviderCatalog: loggedProcedure.output(runtimeClineProviderCatalogResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineProviderCatalog(ctx.workspaceScope);
 		}),
-		getClineAccountProfile: t.procedure.output(runtimeClineAccountProfileResponseSchema).query(async ({ ctx }) => {
+		getClineAccountProfile: loggedProcedure.output(runtimeClineAccountProfileResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineAccountProfile(ctx.workspaceScope);
 		}),
-		getClineKanbanAccess: t.procedure.output(runtimeClineKanbanAccessResponseSchema).query(async ({ ctx }) => {
+		getClineKanbanAccess: loggedProcedure.output(runtimeClineKanbanAccessResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineKanbanAccess(ctx.workspaceScope);
 		}),
-		getFeaturebaseToken: t.procedure.output(runtimeFeaturebaseTokenResponseSchema).query(async ({ ctx }) => {
+		getFeaturebaseToken: loggedProcedure.output(runtimeFeaturebaseTokenResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getFeaturebaseToken(ctx.workspaceScope);
 		}),
-		getClineAccountBalance: t.procedure.output(runtimeClineAccountBalanceResponseSchema).query(async ({ ctx }) => {
+		getClineAccountBalance: loggedProcedure.output(runtimeClineAccountBalanceResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineAccountBalance(ctx.workspaceScope);
 		}),
-		getClineAccountOrganizations: t.procedure
+		getClineAccountOrganizations: loggedProcedure
 			.output(runtimeClineAccountOrganizationsResponseSchema)
 			.query(async ({ ctx }) => {
 				return await ctx.runtimeApi.getClineAccountOrganizations(ctx.workspaceScope);
 			}),
-		switchClineAccount: t.procedure
+		switchClineAccount: loggedProcedure
 			.input(runtimeClineAccountSwitchRequestSchema)
 			.output(runtimeClineAccountSwitchResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.switchClineAccount(ctx.workspaceScope, input);
 			}),
-		getClineProviderModels: t.procedure
+		getClineProviderModels: loggedProcedure
 			.input(runtimeClineProviderModelsRequestSchema)
 			.output(runtimeClineProviderModelsResponseSchema)
 			.query(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.getClineProviderModels(ctx.workspaceScope, input);
 			}),
-		getClineMcpAuthStatuses: t.procedure.output(runtimeClineMcpAuthStatusResponseSchema).query(async ({ ctx }) => {
+		getClineMcpAuthStatuses: loggedProcedure.output(runtimeClineMcpAuthStatusResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineMcpAuthStatuses(ctx.workspaceScope);
 		}),
-		runClineMcpServerOAuth: t.procedure
+		runClineMcpServerOAuth: loggedProcedure
 			.input(runtimeClineMcpOAuthRequestSchema)
 			.output(runtimeClineMcpOAuthResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.runClineMcpServerOAuth(ctx.workspaceScope, input);
 			}),
-		getClineMcpSettings: t.procedure.output(runtimeClineMcpSettingsResponseSchema).query(async ({ ctx }) => {
+		getClineMcpSettings: loggedProcedure.output(runtimeClineMcpSettingsResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getClineMcpSettings(ctx.workspaceScope);
 		}),
-		saveClineMcpSettings: t.procedure
+		saveClineMcpSettings: loggedProcedure
 			.input(runtimeClineMcpSettingsSaveRequestSchema)
 			.output(runtimeClineMcpSettingsSaveResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.saveClineMcpSettings(ctx.workspaceScope, input);
 			}),
-		runClineProviderOAuthLogin: t.procedure
+		runClineProviderOAuthLogin: loggedProcedure
 			.input(runtimeClineOauthLoginRequestSchema)
 			.output(runtimeClineOauthLoginResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.runClineProviderOAuthLogin(ctx.workspaceScope, input);
 			}),
-		startClineDeviceAuth: t.procedure.output(runtimeClineDeviceAuthStartResponseSchema).mutation(async ({ ctx }) => {
+		startClineDeviceAuth: loggedProcedure.output(runtimeClineDeviceAuthStartResponseSchema).mutation(async ({ ctx }) => {
 			return await ctx.runtimeApi.startClineDeviceAuth(ctx.workspaceScope);
 		}),
-		completeClineDeviceAuth: t.procedure
+		completeClineDeviceAuth: loggedProcedure
 			.input(runtimeClineDeviceAuthCompleteRequestSchema)
 			.output(runtimeClineDeviceAuthCompleteResponseSchema)
 			.mutation(async ({ ctx, input }) => {
@@ -583,19 +607,19 @@ export const runtimeAppRouter = t.router({
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.runCommand(ctx.workspaceScope, input);
 			}),
-		resetAllState: t.procedure.output(runtimeDebugResetAllStateResponseSchema).mutation(async ({ ctx }) => {
+		resetAllState: loggedProcedure.output(runtimeDebugResetAllStateResponseSchema).mutation(async ({ ctx }) => {
 			return await ctx.runtimeApi.resetAllState(ctx.workspaceScope);
 		}),
-		openFile: t.procedure
+		openFile: loggedProcedure
 			.input(runtimeOpenFileRequestSchema)
 			.output(runtimeOpenFileResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.openFile(input);
 			}),
-		getUpdateStatus: t.procedure.output(runtimeUpdateStatusResponseSchema).query(async ({ ctx }) => {
+		getUpdateStatus: loggedProcedure.output(runtimeUpdateStatusResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.getUpdateStatus(ctx.workspaceScope);
 		}),
-		runUpdateNow: t.procedure.output(runtimeRunUpdateResponseSchema).mutation(async ({ ctx }) => {
+		runUpdateNow: loggedProcedure.output(runtimeRunUpdateResponseSchema).mutation(async ({ ctx }) => {
 			return await ctx.runtimeApi.runUpdateNow(ctx.workspaceScope);
 		}),
 	}),
@@ -691,25 +715,25 @@ export const runtimeAppRouter = t.router({
 			}),
 	}),
 	projects: t.router({
-		list: t.procedure.output(runtimeProjectsResponseSchema).query(async ({ ctx }) => {
+		list: loggedProcedure.output(runtimeProjectsResponseSchema).query(async ({ ctx }) => {
 			return await ctx.projectsApi.listProjects(ctx.requestedWorkspaceId);
 		}),
-		add: t.procedure
+		add: loggedProcedure
 			.input(runtimeProjectAddRequestSchema)
 			.output(runtimeProjectAddResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.projectsApi.addProject(ctx.requestedWorkspaceId, input);
 			}),
-		remove: t.procedure
+		remove: loggedProcedure
 			.input(runtimeProjectRemoveRequestSchema)
 			.output(runtimeProjectRemoveResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.projectsApi.removeProject(ctx.requestedWorkspaceId, input);
 			}),
-		pickDirectory: t.procedure.output(runtimeProjectDirectoryPickerResponseSchema).mutation(async ({ ctx }) => {
+		pickDirectory: loggedProcedure.output(runtimeProjectDirectoryPickerResponseSchema).mutation(async ({ ctx }) => {
 			return await ctx.projectsApi.pickProjectDirectory(ctx.requestedWorkspaceId);
 		}),
-		listDirectoryContents: t.procedure
+		listDirectoryContents: loggedProcedure
 			.input(runtimeDirectoryListRequestSchema)
 			.output(runtimeDirectoryListResponseSchema)
 			.query(async ({ ctx, input }) => {
@@ -717,7 +741,7 @@ export const runtimeAppRouter = t.router({
 			}),
 	}),
 	hooks: t.router({
-		ingest: t.procedure
+		ingest: loggedProcedure
 			.input(runtimeHookIngestRequestSchema)
 			.output(runtimeHookIngestResponseSchema)
 			.mutation(async ({ ctx, input }) => {
