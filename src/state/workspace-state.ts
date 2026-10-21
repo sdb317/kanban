@@ -448,7 +448,7 @@ function runGitCapture(cwd: string, args: string[]): string | null {
 	return value.length > 0 ? value : null;
 }
 
-function detectGitRoot(cwd: string): string | null {
+export function detectGitRoot(cwd: string): string | null {
 	return runGitCapture(cwd, ["rev-parse", "--show-toplevel"]);
 }
 
@@ -495,7 +495,11 @@ function detectGitDefaultBranch(repoPath: string, branches: string[]): string | 
 function detectGitRepositoryInfo(repoPath: string): RuntimeGitRepositoryInfo {
 	const gitRoot = detectGitRoot(repoPath);
 	if (!gitRoot) {
-		throw new Error(`No git repository detected at ${repoPath}`);
+		return {
+			currentBranch: null,
+			defaultBranch: null,
+			branches: [],
+		};
 	}
 
 	const currentBranch = detectGitCurrentBranch(repoPath);
@@ -521,7 +525,9 @@ async function resolveWorkspacePath(cwd: string): Promise<string> {
 
 	const gitRoot = detectGitRoot(canonicalCwd);
 	if (!gitRoot) {
-		throw new Error(`No git repository detected at ${canonicalCwd}`);
+		// Non-git folders (In-Place Mode) resolve to the canonical cwd instead of
+		// throwing, so workspace identity works without a git repository.
+		return canonicalCwd;
 	}
 
 	const resolvedGitRoot = resolve(gitRoot);
@@ -609,6 +615,29 @@ export async function loadWorkspaceContextById(workspaceId: string): Promise<Run
 	} catch {
 		return null;
 	}
+}
+
+export interface RuntimeWorkspaceScope {
+	workspaceId: string;
+	repoPath: string;
+}
+
+/**
+ * Resolves a workspace scope from the workspace index alone. Unlike
+ * {@link loadWorkspaceContextById}, this reads no git state and does not stat
+ * the repo path, so resolving a request scope never spawns a git process
+ * (In-Place Mode).
+ */
+export async function loadWorkspaceScopeById(workspaceId: string): Promise<RuntimeWorkspaceScope | null> {
+	const index = await readWorkspaceIndex();
+	const entry = index.entries[workspaceId];
+	if (!entry) {
+		return null;
+	}
+	return {
+		workspaceId: entry.workspaceId,
+		repoPath: entry.repoPath,
+	};
 }
 
 export async function listWorkspaceIndexEntries(): Promise<RuntimeWorkspaceIndexEntry[]> {

@@ -14,6 +14,7 @@ import { isClineClearSlashCommand } from "../cline-sdk/cline-slash-commands";
 import type { ClineTaskSessionService } from "../cline-sdk/cline-task-session-service";
 import type { RuntimeConfigState } from "../config/runtime-config";
 import { updateGlobalRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config";
+import { WORKTREES_REQUIRE_GIT_MESSAGE } from "../config/worktree-setting";
 import type {
 	RuntimeCommandRunResponse,
 	RuntimeRunUpdateResponse,
@@ -43,10 +44,12 @@ import {
 } from "../core/api-validation";
 import { isHomeAgentSessionId } from "../core/home-agent-session";
 import { resolveTaskTitle } from "../core/task-title.js";
+import { resolveAgentAppendSystemPrompt } from "../prompts/resolve-agent-append-prompt.js";
 import { openInBrowser } from "../server/browser";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
 import type { TerminalSessionManager } from "../terminal/session-manager";
-import { resolveTaskCwd } from "../workspace/task-worktree";
+import { ProjectFolderUnavailableError } from "../workspace/in-place-task-workspace.js";
+import type { TaskWorkspaceProvider } from "../workspace/task-workspace-provider.js";
 import { captureTaskTurnCheckpoint } from "../workspace/turn-checkpoints";
 import type { RuntimeTrpcContext, RuntimeTrpcWorkspaceScope } from "./app-router";
 
@@ -57,6 +60,8 @@ export interface CreateRuntimeApiDependencies {
 	setActiveRuntimeConfig: (config: RuntimeConfigState) => void;
 	getScopedTerminalManager: (scope: RuntimeTrpcWorkspaceScope) => Promise<TerminalSessionManager>;
 	getScopedClineTaskSessionService: (scope: RuntimeTrpcWorkspaceScope) => Promise<ClineTaskSessionService>;
+	loadEffectiveWorktreesEnabled: (projectPath: string) => Promise<boolean>;
+	resolveTaskWorkspaceProvider: (projectPath: string, worktreesEnabled: boolean) => TaskWorkspaceProvider;
 	resolveInteractiveShellCommand: () => { binary: string; args: string[] };
 	runCommand: (command: string, cwd: string) => Promise<RuntimeCommandRunResponse>;
 	broadcastClineMcpAuthStatusesUpdated?: (
@@ -67,28 +72,6 @@ export interface CreateRuntimeApiDependencies {
 	prepareForStateReset?: () => Promise<void>;
 	getUpdateStatus: () => RuntimeUpdateStatusResponse;
 	runUpdateNow: () => Promise<RuntimeRunUpdateResponse>;
-}
-
-async function resolveExistingTaskCwdOrEnsure(options: {
-	cwd: string;
-	taskId: string;
-	baseRef: string;
-}): Promise<string> {
-	try {
-		return await resolveTaskCwd({
-			cwd: options.cwd,
-			taskId: options.taskId,
-			baseRef: options.baseRef,
-			ensure: false,
-		});
-	} catch {
-		return await resolveTaskCwd({
-			cwd: options.cwd,
-			taskId: options.taskId,
-			baseRef: options.baseRef,
-			ensure: true,
-		});
-	}
 }
 
 export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrpcContext["runtimeApi"] {
@@ -127,17 +110,30 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 		saveConfig: async (workspaceScope, input) => {
 			const parsed = parseRuntimeConfigSaveRequest(input);
 			let nextRuntimeConfig: RuntimeConfigState;
-			if (workspaceScope) {
-				nextRuntimeConfig = await updateRuntimeConfig(workspaceScope.workspacePath, parsed);
-			} else {
-				const activeRuntimeConfig = deps.getActiveRuntimeConfig?.();
-				if (!activeRuntimeConfig) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: "No active runtime config is available.",
-					});
+			try {
+				if (workspaceScope) {
+					nextRuntimeConfig = await updateRuntimeConfig(workspaceScope.workspacePath, parsed);
+				} else {
+					const activeRuntimeConfig = deps.getActiveRuntimeConfig?.();
+					if (!activeRuntimeConfig) {
+						throw new TRPCError({
+							code: "BAD_REQUEST",
+							message: "No active runtime config is available.",
+						});
+					}
+					nextRuntimeConfig = await updateGlobalRuntimeConfig(activeRuntimeConfig, parsed);
 				}
-				nextRuntimeConfig = await updateGlobalRuntimeConfig(activeRuntimeConfig, parsed);
+			} catch (error) {
+				if (error instanceof TRPCError) {
+					throw error;
+				}
+				const message = error instanceof Error ? error.message : String(error);
+				// The git-repo guard (Req 2.7) is a user-correctable input error; everything
+				// else surfaced from the config layer is a persistence failure.
+				throw new TRPCError({
+					code: message === WORKTREES_REQUIRE_GIT_MESSAGE ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
+					message,
+				});
 			}
 			if (workspaceScope && workspaceScope.workspaceId === deps.getActiveWorkspaceId()) {
 				deps.setActiveRuntimeConfig(nextRuntimeConfig);
@@ -167,20 +163,31 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 		},
 		startTaskSession: async (workspaceScope, input) => {
 			try {
-				const body = parseTaskSessionStartRequest(input);
+				// Resolve the mode first so the request parser can accept an empty
+				// baseRef in In-Place Mode while still requiring one in Worktree Mode.
+				const worktreesEnabled = await deps.loadEffectiveWorktreesEnabled(workspaceScope.workspacePath);
+				const body = parseTaskSessionStartRequest(input, { allowEmptyBaseRef: !worktreesEnabled });
 				if (body.resumeFromTrash) {
 					deps.broadcastTaskChatCleared?.(workspaceScope.workspaceId, body.taskId);
 				}
 				const requestedClineTaskMode = body.mode ?? "act";
 				const scopedRuntimeConfig = await deps.loadScopedRuntimeConfig(workspaceScope);
-				const taskCwd = isHomeAgentSessionId(body.taskId)
+				const isHomeSession = isHomeAgentSessionId(body.taskId);
+				const provider = deps.resolveTaskWorkspaceProvider(workspaceScope.workspacePath, worktreesEnabled);
+				const taskCwd = isHomeSession
 					? workspaceScope.workspacePath
-					: await resolveExistingTaskCwdOrEnsure({
-							cwd: workspaceScope.workspacePath,
+					: await provider.resolveTaskCwd({
 							taskId: body.taskId,
 							baseRef: body.baseRef,
+							ensure: true,
 						});
-				const shouldCaptureTurnCheckpoint = !body.resumeFromTrash && !isHomeAgentSessionId(body.taskId);
+				// Checkpoints only exist in Worktree Mode; In-Place Mode never captures them.
+				const shouldCaptureTurnCheckpoint = worktreesEnabled && !body.resumeFromTrash && !isHomeSession;
+				const appendSystemPrompt = resolveAgentAppendSystemPrompt({
+					taskId: body.taskId,
+					projectPath: workspaceScope.workspacePath,
+					worktreesEnabled,
+				});
 
 				// Per-task config source-of-truth precedence:
 				//
@@ -243,6 +250,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 						apiKey: clineLaunchConfig.apiKey,
 						baseUrl: clineLaunchConfig.baseUrl,
 						reasoningEffort: clineLaunchConfig.reasoningEffort,
+						appendSystemPrompt,
 					});
 
 					let nextSummary = summary;
@@ -258,6 +266,9 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 						} catch {
 							// Best effort checkpointing only.
 						}
+					} else if (!worktreesEnabled && !isHomeSession) {
+						// In-Place Mode never checkpoints; clear any stale fields on start.
+						nextSummary = clineTaskSessionService.clearTurnCheckpoints(body.taskId) ?? summary;
 					}
 
 					return {
@@ -292,6 +303,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					cols: body.cols,
 					rows: body.rows,
 					workspaceId: workspaceScope.workspaceId,
+					appendSystemPrompt,
 				});
 
 				let nextSummary = summary;
@@ -307,13 +319,24 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					} catch {
 						// Best effort checkpointing only.
 					}
+				} else if (!worktreesEnabled && !isHomeSession) {
+					// In-Place Mode never checkpoints; clear any stale fields on start.
+					nextSummary = terminalManager.clearTurnCheckpoints(body.taskId) ?? summary;
 				}
 				return {
 					ok: true,
 					summary: nextSummary,
 				};
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
+				// In-Place Mode: a missing/invalid project folder surfaces as
+				// ProjectFolderUnavailableError. We report it as a failed start and
+				// leave the task card where it was rather than throwing (Req 3.9).
+				const message =
+					error instanceof ProjectFolderUnavailableError
+						? error.message
+						: error instanceof Error
+							? error.message
+							: String(error);
 				return {
 					ok: false,
 					summary: null,
@@ -658,16 +681,20 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 		},
 		startShellSession: async (workspaceScope, input) => {
 			try {
-				const body = parseShellSessionStartRequest(input);
+				// Resolve the mode first so the parser can accept an empty baseRef in
+				// In-Place Mode while still requiring one in Worktree Mode.
+				const worktreesEnabled = await deps.loadEffectiveWorktreesEnabled(workspaceScope.workspacePath);
+				const body = parseShellSessionStartRequest(input, { allowEmptyBaseRef: !worktreesEnabled });
 				const terminalManager = await deps.getScopedTerminalManager(workspaceScope);
 				const shell = deps.resolveInteractiveShellCommand();
 				const shellCwd = body.workspaceTaskId
-					? await resolveTaskCwd({
-							cwd: workspaceScope.workspacePath,
-							taskId: body.workspaceTaskId,
-							baseRef: body.baseRef,
-							ensure: true,
-						})
+					? await deps
+							.resolveTaskWorkspaceProvider(workspaceScope.workspacePath, worktreesEnabled)
+							.resolveTaskCwd({
+								taskId: body.workspaceTaskId,
+								baseRef: body.baseRef,
+								ensure: true,
+							})
 					: workspaceScope.workspacePath;
 				const summary = await terminalManager.startShellSession({
 					taskId: body.taskId,

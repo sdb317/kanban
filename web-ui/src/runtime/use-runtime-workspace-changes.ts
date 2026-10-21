@@ -20,8 +20,9 @@ export function useRuntimeWorkspaceChanges(
 	pollIntervalMs: number | null = null,
 	viewKey: string | null = null,
 	clearOnViewTransition = true,
+	enabled = true,
 ): UseRuntimeWorkspaceChangesResult {
-	const hasWorkspaceScope = taskId !== null && workspaceId !== null && baseRef !== null;
+	const hasWorkspaceScope = enabled && taskId !== null && workspaceId !== null && baseRef !== null;
 	const normalizedViewKey = viewKey ?? "__default__";
 	const requestKey = `${workspaceId ?? "__none__"}:${taskId ?? "__none__"}:${baseRef ?? "__none__"}:${mode}:${normalizedViewKey}`;
 	const previousRequestKeyRef = useRef(requestKey);

@@ -27,6 +27,7 @@ import type {
 	RuntimeWorkspaceChangesMode,
 } from "@/runtime/types";
 import { useRuntimeWorkspaceChanges } from "@/runtime/use-runtime-workspace-changes";
+import { useWorktreeMode } from "@/runtime/worktree-mode";
 import { useTaskWorkspaceStateVersionValue } from "@/stores/workspace-metadata-store";
 import { useTerminalThemeColors } from "@/terminal/theme-colors";
 import { type BoardCard, type CardSelection, getTaskAutoReviewCancelButtonLabel } from "@/types";
@@ -434,6 +435,7 @@ export function CardDetailView({
 	}) => void;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
+	const { isWorktreeMode } = useWorktreeMode();
 	const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
 	const terminalThemeColors = useTerminalThemeColors();
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -497,6 +499,7 @@ export function CardDetailView({
 		isDocumentVisible && !gitHistoryPanel && selection.column.id !== "trash" ? DETAIL_DIFF_POLL_INTERVAL_MS : null,
 		lastTurnViewKey,
 		true,
+		isWorktreeMode,
 	);
 	const runtimeFiles = workspaceChanges?.files ?? null;
 	const isWorkspaceChangesPending = isRuntimeAvailable && workspaceChanges === null;
@@ -650,8 +653,8 @@ export function CardDetailView({
 			onLoadMessages={onLoadClineChatMessages}
 			incomingMessages={streamedClineChatMessages}
 			incomingMessage={latestClineChatMessage}
-			onCommit={onAgentCommitTask ? () => onAgentCommitTask(selection.card.id) : undefined}
-			onOpenPr={onAgentOpenPrTask ? () => onAgentOpenPrTask(selection.card.id) : undefined}
+			onCommit={isWorktreeMode && onAgentCommitTask ? () => onAgentCommitTask(selection.card.id) : undefined}
+			onOpenPr={isWorktreeMode && onAgentOpenPrTask ? () => onAgentOpenPrTask(selection.card.id) : undefined}
 			isCommitLoading={agentCommitTaskLoadingById?.[selection.card.id] ?? false}
 			isOpenPrLoading={agentOpenPrTaskLoadingById?.[selection.card.id] ?? false}
 			showMoveToTrash={showMoveToTrashActions}
@@ -675,8 +678,8 @@ export function CardDetailView({
 			terminalEnabled={isTaskTerminalEnabled}
 			summary={sessionSummary}
 			onSummary={onSessionSummary}
-			onCommit={onAgentCommitTask ? () => onAgentCommitTask(selection.card.id) : undefined}
-			onOpenPr={onAgentOpenPrTask ? () => onAgentOpenPrTask(selection.card.id) : undefined}
+			onCommit={isWorktreeMode && onAgentCommitTask ? () => onAgentCommitTask(selection.card.id) : undefined}
+			onOpenPr={isWorktreeMode && onAgentOpenPrTask ? () => onAgentOpenPrTask(selection.card.id) : undefined}
 			isCommitLoading={agentCommitTaskLoadingById?.[selection.card.id] ?? false}
 			isOpenPrLoading={agentOpenPrTaskLoadingById?.[selection.card.id] ?? false}
 			showSessionToolbar={false}
@@ -704,68 +707,72 @@ export function CardDetailView({
 	if (isMobile) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-0">
-				<MobileDetailTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
+				{isWorktreeMode ? <MobileDetailTabBar activeTab={mobileTab} onTabChange={setMobileTab} /> : null}
 				<div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 					<div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
 						{/* Chat panel */}
 						<div
 							className="min-h-0 min-w-0 flex-1 flex-col"
-							style={{ display: mobileTab === "chat" ? "flex" : "none" }}
+							style={{ display: !isWorktreeMode || mobileTab === "chat" ? "flex" : "none" }}
 						>
 							{agentChatPanel}
 						</div>
 						{/* Diff panel */}
-						<div
-							className="min-h-0 min-w-0 flex-1 flex-col"
-							style={{ display: mobileTab === "diff" ? "flex" : "none" }}
-						>
-							{isRuntimeAvailable ? (
-								<DiffToolbar
-									mode={diffMode}
-									onModeChange={setDiffMode}
-									isExpanded={false}
-									onToggleExpand={handleToggleDiffExpand}
-									hideExpand
-								/>
-							) : null}
-							<div className="flex min-h-0 flex-1">
-								{isWorkspaceChangesPending ? (
-									<WorkspaceChangesLoadingPanel panelFlex="1 1 0" />
-								) : hasNoWorkspaceFileChanges ? (
-									<WorkspaceChangesEmptyPanel title={emptyDiffTitle} />
-								) : (
-									<DiffViewerPanel
-										workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-										selectedPath={selectedPath}
-										onSelectedPathChange={setSelectedPath}
-										viewMode="unified"
-										onAddToTerminal={
-											onAddReviewComments || showClineAgentChatPanel ? handleAddDiffComments : undefined
-										}
-										onSendToTerminal={
-											onSendReviewComments || showClineAgentChatPanel ? handleSendDiffComments : undefined
-										}
-										comments={diffComments}
-										onCommentsChange={setDiffComments}
+						{isWorktreeMode ? (
+							<div
+								className="min-h-0 min-w-0 flex-1 flex-col"
+								style={{ display: mobileTab === "diff" ? "flex" : "none" }}
+							>
+								{isRuntimeAvailable ? (
+									<DiffToolbar
+										mode={diffMode}
+										onModeChange={setDiffMode}
+										isExpanded={false}
+										onToggleExpand={handleToggleDiffExpand}
+										hideExpand
 									/>
-								)}
+								) : null}
+								<div className="flex min-h-0 flex-1">
+									{isWorkspaceChangesPending ? (
+										<WorkspaceChangesLoadingPanel panelFlex="1 1 0" />
+									) : hasNoWorkspaceFileChanges ? (
+										<WorkspaceChangesEmptyPanel title={emptyDiffTitle} />
+									) : (
+										<DiffViewerPanel
+											workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
+											selectedPath={selectedPath}
+											onSelectedPathChange={setSelectedPath}
+											viewMode="unified"
+											onAddToTerminal={
+												onAddReviewComments || showClineAgentChatPanel ? handleAddDiffComments : undefined
+											}
+											onSendToTerminal={
+												onSendReviewComments || showClineAgentChatPanel ? handleSendDiffComments : undefined
+											}
+											comments={diffComments}
+											onCommentsChange={setDiffComments}
+										/>
+									)}
+								</div>
 							</div>
-						</div>
+						) : null}
 						{/* Files panel */}
-						<div
-							className="min-h-0 min-w-0 flex-1 flex-col"
-							style={{ display: mobileTab === "files" ? "flex" : "none" }}
-						>
-							<FileTreePanel
-								workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-								selectedPath={selectedPath}
-								onSelectPath={(path: string) => {
-									setSelectedPath(path);
-									setMobileTab("diff");
-								}}
-								panelFlex="1 1 0"
-							/>
-						</div>
+						{isWorktreeMode ? (
+							<div
+								className="min-h-0 min-w-0 flex-1 flex-col"
+								style={{ display: mobileTab === "files" ? "flex" : "none" }}
+							>
+								<FileTreePanel
+									workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
+									selectedPath={selectedPath}
+									onSelectPath={(path: string) => {
+										setSelectedPath(path);
+										setMobileTab("diff");
+									}}
+									panelFlex="1 1 0"
+								/>
+							</div>
+						) : null}
 					</div>
 					{/* Terminal panel — bottom overlay */}
 					{showBottomTerminal ? (
@@ -836,7 +843,30 @@ export function CardDetailView({
 				className="flex min-h-0 min-w-0 flex-col overflow-hidden"
 				style={{ width: isDiffExpanded ? "100%" : detailContentPanelPercent }}
 			>
-				{gitHistoryPanel ? (
+				{!isWorktreeMode ? (
+					<>
+						<div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{agentChatPanel}</div>
+						{bottomTerminalOpen && bottomTerminalTaskId ? (
+							<BottomTerminalSection
+								taskId={bottomTerminalTaskId}
+								workspaceId={currentProjectId}
+								summary={bottomTerminalSummary}
+								onSummary={onSessionSummary}
+								onClose={onBottomTerminalClose}
+								subtitle={bottomTerminalSubtitle}
+								terminalThemeColors={terminalThemeColors}
+								onConnectionReady={onBottomTerminalConnectionReady}
+								agentCommand={bottomTerminalAgentCommand}
+								onSendAgentCommand={onBottomTerminalSendAgentCommand}
+								paneHeight={bottomTerminalPaneHeight}
+								onPaneHeightChange={onBottomTerminalPaneHeightChange}
+								onCollapse={onBottomTerminalCollapse}
+								isExpanded={isBottomTerminalExpanded}
+								onToggleExpand={onBottomTerminalToggleExpand}
+							/>
+						) : null}
+					</>
+				) : gitHistoryPanel ? (
 					<div className="flex min-h-0 flex-1 overflow-hidden">{gitHistoryPanel}</div>
 				) : (
 					<>

@@ -9,6 +9,7 @@ import packageJson from "../package.json" with { type: "json" };
 import { disposeCliTelemetryService } from "./cline-sdk/cline-telemetry-service.js";
 import { registerHooksCommand } from "./commands/hooks";
 import { registerTaskCommand } from "./commands/task";
+import { loadEffectiveWorktreesEnabled, loadGlobalWorktreesEnabled } from "./config/effective-worktree-mode";
 import { loadGlobalRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config";
 import type { RuntimeCommandRunResponse } from "./core/api-contract";
 import { createGitProcessEnv } from "./core/git-process-env";
@@ -282,7 +283,10 @@ async function canReachKanbanServer(workspaceId: string | null): Promise<boolean
 
 async function tryOpenExistingServer(options: { noOpen: boolean; shouldAutoOpenBrowser: boolean }): Promise<boolean> {
 	let workspaceId: string | null = null;
-	if (hasGitRepository(process.cwd())) {
+	// In In-Place Mode (global setting `false`) a non-git `cwd` is a valid project,
+	// so resolve its workspace id the same way the registry does (Req 10.6).
+	const shouldResolveWorkspaceId = hasGitRepository(process.cwd()) || (await loadGlobalWorktreesEnabled()) === false;
+	if (shouldResolveWorkspaceId) {
 		const { loadWorkspaceContext } = await import("./state/workspace-state.js");
 		const context = await loadWorkspaceContext(process.cwd());
 		workspaceId = context.workspaceId;
@@ -413,6 +417,8 @@ async function startServer(): Promise<{
 		loadRuntimeConfig,
 		hasGitRepository,
 		pathIsDirectory,
+		loadGlobalWorktreesEnabled,
+		loadEffectiveWorktreesEnabled,
 		onTerminalManagerReady: (workspaceId, manager) => {
 			runtimeStateHub?.trackTerminalManager(workspaceId, manager);
 		},
@@ -507,6 +513,7 @@ async function startServer(): Promise<{
 			},
 			closeRuntimeServer: close,
 			skipSessionCleanup: options?.skipSessionCleanup ?? false,
+			loadEffectiveWorktreesEnabled,
 		});
 	};
 

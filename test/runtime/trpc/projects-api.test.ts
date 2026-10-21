@@ -44,6 +44,8 @@ function createDefaultDeps(serverCwd: string): CreateProjectsApiDependencies {
 			workspacePath: null as string | null,
 		})),
 		collectProjectWorktreeTaskIdsForRemoval: vi.fn(() => new Set<string>()),
+		loadGlobalWorktreesEnabled: vi.fn(async () => true),
+		loadEffectiveWorktreesEnabled: vi.fn(async () => true),
 		warn: vi.fn(),
 		buildProjectsPayload: vi.fn(async () => ({ currentProjectId: null, projects: [] })),
 		pickDirectoryPathFromSystemDialog: vi.fn(() => null),

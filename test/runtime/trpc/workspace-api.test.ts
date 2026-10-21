@@ -99,6 +99,7 @@ describe("createWorkspaceApi loadChanges", () => {
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastRuntimeProjectsUpdated: vi.fn(),
 			buildWorkspaceStateSnapshot: vi.fn(),
+			loadEffectiveWorktreesEnabled: async () => true,
 		});
 
 		await api.loadChanges(
@@ -148,6 +149,7 @@ describe("createWorkspaceApi loadChanges", () => {
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastRuntimeProjectsUpdated: vi.fn(),
 			buildWorkspaceStateSnapshot: vi.fn(),
+			loadEffectiveWorktreesEnabled: async () => true,
 		});
 
 		await api.loadChanges(
@@ -199,6 +201,7 @@ describe("createWorkspaceApi loadChanges", () => {
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastRuntimeProjectsUpdated: vi.fn(),
 			buildWorkspaceStateSnapshot: vi.fn(),
+			loadEffectiveWorktreesEnabled: async () => true,
 		});
 
 		await api.loadChanges(
@@ -271,6 +274,7 @@ describe("createWorkspaceApi loadChanges", () => {
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastRuntimeProjectsUpdated: vi.fn(),
 			buildWorkspaceStateSnapshot: vi.fn(),
+			loadEffectiveWorktreesEnabled: async () => true,
 		});
 
 		await api.loadChanges(
@@ -306,6 +310,7 @@ describe("createWorkspaceApi loadChanges", () => {
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastRuntimeProjectsUpdated: vi.fn(),
 			buildWorkspaceStateSnapshot: vi.fn(),
+			loadEffectiveWorktreesEnabled: async () => true,
 		});
 
 		const response = await api.loadChanges(

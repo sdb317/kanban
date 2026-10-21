@@ -132,6 +132,8 @@ function HookHarness({
 		readyForReviewNotificationsEnabled: false,
 		taskGitActionLoadingByTaskId: {},
 		runAutoReviewGitAction: NOOP_RUN_AUTO_REVIEW,
+		autoReviewEnabled: true,
+		worktreesEnabled: true,
 	});
 
 	useEffect(() => {

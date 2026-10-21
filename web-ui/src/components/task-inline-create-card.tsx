@@ -1,7 +1,8 @@
 import * as RadixCheckbox from "@radix-ui/react-checkbox";
 import { deriveTaskTitleFromPrompt } from "@runtime-task-title";
+import { resolveInPlaceDefaultBaseRef } from "@runtime-worktree-setting";
 import { ArrowBigUp, Check, Command, CornerDownLeft } from "lucide-react";
-import { type Dispatch, type ReactElement, type SetStateAction, useCallback, useRef, useState } from "react";
+import { type Dispatch, type ReactElement, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 import { BranchSelectDropdown, type BranchSelectOption } from "@/components/branch-select-dropdown";
@@ -9,7 +10,13 @@ import { TaskAgentModelPicker, useTaskAgentModelPicker } from "@/components/task
 import { TaskPromptComposer } from "@/components/task-prompt-composer";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
-import type { RuntimeAgentId, RuntimeClineReasoningEffort, RuntimeTaskClineSettings } from "@/runtime/types";
+import type {
+	RuntimeAgentId,
+	RuntimeClineReasoningEffort,
+	RuntimeGitRepositoryInfo,
+	RuntimeTaskClineSettings,
+} from "@/runtime/types";
+import { useWorktreeMode } from "@/runtime/worktree-mode";
 import type { TaskAutoReviewMode, TaskImage } from "@/types";
 import { pasteShortcutLabel } from "@/utils/platform";
 import { useDocumentEvent, useMeasure } from "@/utils/react-use";
@@ -61,6 +68,7 @@ export function TaskInlineCreateCard({
 	onAutoReviewModeChange,
 	startInPlanModeDisabled = false,
 	workspaceId,
+	workspaceGit = null,
 	branchRef,
 	branchOptions,
 	onBranchRefChange,
@@ -93,6 +101,7 @@ export function TaskInlineCreateCard({
 	onAutoReviewModeChange: (value: TaskAutoReviewMode) => void;
 	startInPlanModeDisabled?: boolean;
 	workspaceId: string | null;
+	workspaceGit?: RuntimeGitRepositoryInfo | null;
 	branchRef: string;
 	branchOptions: TaskBranchOption[];
 	onBranchRefChange: (value: string) => void;
@@ -131,6 +140,7 @@ export function TaskInlineCreateCard({
 		},
 		[measureRef],
 	);
+	const { isWorktreeMode } = useWorktreeMode();
 	const isCompactActions = cardRect.width > 0 && cardRect.width < COMPACT_ACTIONS_WIDTH_THRESHOLD_PX;
 	const hideCancelShortcut = isCompactActions;
 	const hideCreateShortcut = mode === "create" && isCompactActions;
@@ -155,6 +165,18 @@ export function TaskInlineCreateCard({
 		defaultProviderId,
 		defaultModelId,
 	});
+
+	// In In-Place Mode the base-ref picker is hidden; new tasks submit with the
+	// resolved default base ref. The edit flow keeps its stored baseRef unchanged.
+	const inPlaceDefaultBaseRef = resolveInPlaceDefaultBaseRef(workspaceGit);
+	useEffect(() => {
+		if (isWorktreeMode || mode !== "create") {
+			return;
+		}
+		if (branchRef !== inPlaceDefaultBaseRef) {
+			onBranchRefChange(inPlaceDefaultBaseRef);
+		}
+	}, [isWorktreeMode, mode, branchRef, inPlaceDefaultBaseRef, onBranchRefChange]);
 
 	useHotkeys(
 		"escape",
@@ -259,55 +281,59 @@ export function TaskInlineCreateCard({
 					<span>Start in plan mode</span>
 				</label>
 
-				<div>
-					<span className="text-[11px] text-text-secondary block mb-1">Worktree base ref</span>
-					<BranchSelectDropdown
-						id={branchSelectId}
-						options={branchOptions}
-						selectedValue={branchRef}
-						onSelect={onBranchRefChange}
-						onPopoverOpenChange={setIsBranchPopoverOpen}
-						fill
-						size="sm"
-						emptyText="No branches detected"
-					/>
-				</div>
+				{isWorktreeMode ? (
+					<>
+						<div>
+							<span className="text-[11px] text-text-secondary block mb-1">Worktree base ref</span>
+							<BranchSelectDropdown
+								id={branchSelectId}
+								options={branchOptions}
+								selectedValue={branchRef}
+								onSelect={onBranchRefChange}
+								onPopoverOpenChange={setIsBranchPopoverOpen}
+								fill
+								size="sm"
+								emptyText="No branches detected"
+							/>
+						</div>
 
-				<div className="flex items-center gap-2 flex-wrap">
-					<label
-						htmlFor={autoReviewEnabledId}
-						className="flex items-center gap-2 text-[12px] text-text-primary cursor-pointer select-none"
-					>
-						<RadixCheckbox.Root
-							id={autoReviewEnabledId}
-							aria-label="Enable automatic review action"
-							checked={autoReviewEnabled}
-							onCheckedChange={(checked) => onAutoReviewEnabledChange(checked === true)}
-							className="flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm border border-border-bright bg-surface-3 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
-						>
-							<RadixCheckbox.Indicator>
-								<Check size={10} className="text-white" />
-							</RadixCheckbox.Indicator>
-						</RadixCheckbox.Root>
-						<span>Automatically</span>
-					</label>
-					<NativeSelect
-						id={autoReviewModeId}
-						size="sm"
-						value={autoReviewMode}
-						onChange={(event) => onAutoReviewModeChange(event.currentTarget.value as TaskAutoReviewMode)}
-						style={{
-							width: `${AUTO_REVIEW_MODE_SELECT_WIDTH_CH}ch`,
-							maxWidth: "100%",
-						}}
-					>
-						{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
-							<option key={option.value} value={option.value}>
-								{option.label}
-							</option>
-						))}
-					</NativeSelect>
-				</div>
+						<div className="flex items-center gap-2 flex-wrap">
+							<label
+								htmlFor={autoReviewEnabledId}
+								className="flex items-center gap-2 text-[12px] text-text-primary cursor-pointer select-none"
+							>
+								<RadixCheckbox.Root
+									id={autoReviewEnabledId}
+									aria-label="Enable automatic review action"
+									checked={autoReviewEnabled}
+									onCheckedChange={(checked) => onAutoReviewEnabledChange(checked === true)}
+									className="flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm border border-border-bright bg-surface-3 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
+								>
+									<RadixCheckbox.Indicator>
+										<Check size={10} className="text-white" />
+									</RadixCheckbox.Indicator>
+								</RadixCheckbox.Root>
+								<span>Automatically</span>
+							</label>
+							<NativeSelect
+								id={autoReviewModeId}
+								size="sm"
+								value={autoReviewMode}
+								onChange={(event) => onAutoReviewModeChange(event.currentTarget.value as TaskAutoReviewMode)}
+								style={{
+									width: `${AUTO_REVIEW_MODE_SELECT_WIDTH_CH}ch`,
+									maxWidth: "100%",
+								}}
+							>
+								{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
+									<option key={option.value} value={option.value}>
+										{option.label}
+									</option>
+								))}
+							</NativeSelect>
+						</div>
+					</>
+				) : null}
 				{onAgentIdChange && onClineSettingsChange ? (
 					<TaskAgentModelPicker
 						agentId={agentId}
@@ -341,7 +367,7 @@ export function TaskInlineCreateCard({
 						size="sm"
 						className="whitespace-nowrap"
 						onClick={onCreate}
-						disabled={!prompt.trim() || !branchRef}
+						disabled={!prompt.trim() || (isWorktreeMode && !branchRef)}
 					>
 						<span className="inline-flex items-center">
 							<span>{actionLabel}</span>
@@ -354,7 +380,7 @@ export function TaskInlineCreateCard({
 							size="sm"
 							className="whitespace-nowrap"
 							onClick={onCreateAndStart}
-							disabled={!prompt.trim() || !branchRef}
+							disabled={!prompt.trim() || (isWorktreeMode && !branchRef)}
 						>
 							<span className="inline-flex items-center">
 								<span>Start</span>

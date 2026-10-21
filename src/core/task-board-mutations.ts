@@ -290,10 +290,9 @@ export function addTaskToColumn(
 	if (!prompt) {
 		throw new Error("Task prompt is required.");
 	}
+	// Empty baseRef is valid data: In-Place Mode stores "" without branch validation (Req 10.2, 10.3).
+	// The Worktree path rejects an empty baseRef later where it is actually required.
 	const baseRef = input.baseRef.trim();
-	if (!baseRef) {
-		throw new Error("Task baseRef is required.");
-	}
 	const existingIds = collectExistingTaskIds(board);
 	const explicitTaskId = input.taskId?.trim();
 	if (explicitTaskId && existingIds.has(explicitTaskId)) {
@@ -598,14 +597,8 @@ export function updateTask(
 		};
 	}
 
+	// Empty baseRef is valid data: In-Place Mode stores "" without branch validation (Req 10.2, 10.3).
 	const baseRef = input.baseRef.trim();
-	if (!baseRef) {
-		return {
-			board,
-			task: null,
-			updated: false,
-		};
-	}
 
 	let updatedTask: RuntimeBoardCard | null = null;
 	const columns = board.columns.map((column) => {

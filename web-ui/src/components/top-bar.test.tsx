@@ -3,6 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TopBar } from "@/components/top-bar";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
+import { resetWorkspaceMetadataStore, setHomeGitSummary } from "@/stores/workspace-metadata-store";
+import { renderWithWorktreeMode } from "@/test-utils/render-with-worktree-mode";
 
 function findButtonByText(container: HTMLElement, text: string): HTMLButtonElement | null {
 	return (Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === text) ??
@@ -48,17 +52,19 @@ describe("TopBar script shortcut onboarding", () => {
 
 		await act(async () => {
 			root.render(
-				<TopBar
-					openTargetOptions={[]}
-					selectedOpenTargetId="vscode"
-					onSelectOpenTarget={() => {}}
-					onOpenWorkspace={() => {}}
-					canOpenWorkspace={false}
-					isOpeningWorkspace={false}
-					shortcuts={[]}
-					onRunShortcut={onRunShortcut}
-					onCreateFirstShortcut={onCreateFirstShortcut}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<TopBar
+						openTargetOptions={[]}
+						selectedOpenTargetId="vscode"
+						onSelectOpenTarget={() => {}}
+						onOpenWorkspace={() => {}}
+						canOpenWorkspace={false}
+						isOpeningWorkspace={false}
+						shortcuts={[]}
+						onRunShortcut={onRunShortcut}
+						onCreateFirstShortcut={onCreateFirstShortcut}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -108,16 +114,18 @@ describe("TopBar script shortcut onboarding", () => {
 
 		await act(async () => {
 			root.render(
-				<TopBar
-					openTargetOptions={[]}
-					selectedOpenTargetId="vscode"
-					onSelectOpenTarget={() => {}}
-					onOpenWorkspace={() => {}}
-					canOpenWorkspace={false}
-					isOpeningWorkspace={false}
-					runtimeHint="No agent configured"
-					onOpenSettings={onOpenSettings}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<TopBar
+						openTargetOptions={[]}
+						selectedOpenTargetId="vscode"
+						onSelectOpenTarget={() => {}}
+						onOpenWorkspace={() => {}}
+						canOpenWorkspace={false}
+						isOpeningWorkspace={false}
+						runtimeHint="No agent configured"
+						onOpenSettings={onOpenSettings}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -130,5 +138,69 @@ describe("TopBar script shortcut onboarding", () => {
 		});
 
 		expect(onOpenSettings).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("TopBar git status gating by worktree mode", () => {
+	beforeEach(() => {
+		resetWorkspaceMetadataStore();
+		setHomeGitSummary({
+			currentBranch: "feature/in-place",
+			upstreamBranch: "origin/feature/in-place",
+			changedFiles: 3,
+			additions: 12,
+			deletions: 4,
+			aheadCount: 1,
+			behindCount: 2,
+		});
+	});
+
+	afterEach(() => {
+		resetWorkspaceMetadataStore();
+	});
+
+	function renderTopBar(worktreesEnabled: boolean) {
+		return renderWithWorktreeMode(
+			<TooltipProvider>
+				<TopBar
+					openTargetOptions={[]}
+					selectedOpenTargetId="vscode"
+					onSelectOpenTarget={() => {}}
+					onOpenWorkspace={() => {}}
+					canOpenWorkspace={false}
+					isOpeningWorkspace={false}
+					workspacePath="/home/user/project"
+					showHomeGitSummary={true}
+					onToggleGitHistory={() => {}}
+				/>
+			</TooltipProvider>,
+			{ worktreesEnabled },
+		);
+	}
+
+	it("renders the branch label, git history toggle, and working-copy counts in Worktree Mode", () => {
+		const { container, unmount } = renderTopBar(true);
+		try {
+			expect(container.textContent).toContain("feature/in-place");
+			expect(container.textContent).toContain("3 files");
+			expect(container.textContent).toContain("+12");
+			expect(container.textContent).toContain("-4");
+			expect(container.querySelector('[aria-label="Fetch from upstream"]')).not.toBeNull();
+		} finally {
+			unmount();
+		}
+	});
+
+	it("does not render the branch label, git history toggle, or working-copy counts in In-Place Mode", () => {
+		const { container, unmount } = renderTopBar(false);
+		try {
+			expect(container.textContent).not.toContain("feature/in-place");
+			expect(container.textContent).not.toContain("3 files");
+			expect(container.textContent).not.toContain("+12");
+			expect(container.textContent).not.toContain("-4");
+			expect(container.querySelector('[aria-label="Fetch from upstream"]')).toBeNull();
+		} finally {
+			unmount();
+		}
 	});
 });

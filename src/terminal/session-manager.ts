@@ -90,6 +90,7 @@ export interface StartTaskSessionRequest {
 	rows?: number;
 	env?: Record<string, string | undefined>;
 	workspaceId?: string;
+	appendSystemPrompt?: string | null;
 }
 
 export interface StartShellSessionRequest {
@@ -334,6 +335,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 			resumeFromTrash: request.resumeFromTrash,
 			env: request.env,
 			workspaceId: request.workspaceId,
+			appendSystemPrompt: request.appendSystemPrompt,
 		});
 
 		const env = buildTerminalEnvironment(request.env, launch.env);
@@ -903,6 +905,28 @@ export class TerminalSessionManager implements TerminalSessionService {
 		const summary = updateSummary(entry, {
 			previousTurnCheckpoint: latestCheckpoint,
 			latestTurnCheckpoint: checkpoint,
+		});
+		if (entry.active) {
+			for (const listener of entry.listeners.values()) {
+				listener.onState?.(cloneSummary(summary));
+			}
+		}
+		this.emitSummary(summary);
+		return cloneSummary(summary);
+	}
+
+	clearTurnCheckpoints(taskId: string): RuntimeTaskSessionSummary | null {
+		const entry = this.entries.get(taskId);
+		if (!entry) {
+			return null;
+		}
+		if (entry.summary.latestTurnCheckpoint === null && entry.summary.previousTurnCheckpoint === null) {
+			return cloneSummary(entry.summary);
+		}
+
+		const summary = updateSummary(entry, {
+			latestTurnCheckpoint: null,
+			previousTurnCheckpoint: null,
 		});
 		if (entry.active) {
 			for (const listener of entry.listeners.values()) {

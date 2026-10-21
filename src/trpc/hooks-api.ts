@@ -7,6 +7,7 @@ import type {
 import { parseHookIngestRequest } from "../core/api-validation";
 import { loadWorkspaceContextById } from "../state/workspace-state";
 import type { TerminalSessionManager } from "../terminal/session-manager";
+import type { TurnCheckpointPolicy } from "../workspace/turn-checkpoint-policy";
 import { captureTaskTurnCheckpoint, deleteTaskTurnCheckpointRef } from "../workspace/turn-checkpoints";
 import type { RuntimeTrpcContext } from "./app-router";
 
@@ -21,6 +22,12 @@ export interface CreateHooksApiDependencies {
 		turn: number;
 	}) => Promise<RuntimeTaskTurnCheckpoint>;
 	deleteTaskTurnCheckpointRef?: (input: { cwd: string; ref: string }) => Promise<void>;
+	/**
+	 * Decides whether a turn checkpoint should be captured for a given project path.
+	 * Optional and defaults to always-capture, preserving Worktree Mode behavior for
+	 * callers that do not supply a policy.
+	 */
+	turnCheckpointPolicy?: TurnCheckpointPolicy;
 }
 
 function canTransitionTaskForHookEvent(summary: RuntimeTaskSessionSummary, event: RuntimeHookEvent): boolean {
@@ -39,6 +46,9 @@ function canTransitionTaskForHookEvent(summary: RuntimeTaskSessionSummary, event
 export function createHooksApi(deps: CreateHooksApiDependencies): RuntimeTrpcContext["hooksApi"] {
 	const checkpointCapture = deps.captureTaskTurnCheckpoint ?? captureTaskTurnCheckpoint;
 	const checkpointRefDelete = deps.deleteTaskTurnCheckpointRef ?? deleteTaskTurnCheckpointRef;
+	// Default to always-capture when no policy is supplied, preserving Worktree Mode behavior.
+	const shouldCaptureTurnCheckpoint = (workspacePath: string): Promise<boolean> =>
+		deps.turnCheckpointPolicy?.shouldCaptureTurnCheckpoint(workspacePath) ?? Promise.resolve(true);
 
 	return {
 		ingest: async (input) => {
@@ -84,7 +94,10 @@ export function createHooksApi(deps: CreateHooksApiDependencies): RuntimeTrpcCon
 					} satisfies RuntimeHookIngestResponse;
 				}
 
-				if (event === "to_review") {
+				if (event === "to_review" && (await shouldCaptureTurnCheckpoint(workspacePath))) {
+					// Worktree Mode only: capture the turn checkpoint and prune the stale ref.
+					// In In-Place Mode the policy returns false, so the summary keeps its cleared
+					// checkpoint fields and the unconditional broadcast below reports them as null.
 					const nextTurn = (transitionedSummary.latestTurnCheckpoint?.turn ?? 0) + 1;
 					const checkpointCwd = transitionedSummary.workspacePath ?? workspacePath;
 					const staleRef = transitionedSummary.previousTurnCheckpoint?.ref ?? null;

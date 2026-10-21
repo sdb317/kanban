@@ -130,13 +130,27 @@ vi.mock("../../../src/server/browser.js", () => ({
 
 import type { RuntimeTrpcContext } from "../../../src/trpc/app-router";
 import { type CreateRuntimeApiDependencies, createRuntimeApi } from "../../../src/trpc/runtime-api";
+import { createTaskWorkspaceProvider } from "../../../src/workspace/task-workspace-provider.js";
 
 function createTestRuntimeApi(
-	deps: Omit<CreateRuntimeApiDependencies, "getUpdateStatus" | "runUpdateNow"> &
-		Partial<Pick<CreateRuntimeApiDependencies, "getUpdateStatus" | "runUpdateNow">>,
+	deps: Omit<
+		CreateRuntimeApiDependencies,
+		"getUpdateStatus" | "runUpdateNow" | "loadEffectiveWorktreesEnabled" | "resolveTaskWorkspaceProvider"
+	> &
+		Partial<
+			Pick<
+				CreateRuntimeApiDependencies,
+				"getUpdateStatus" | "runUpdateNow" | "loadEffectiveWorktreesEnabled" | "resolveTaskWorkspaceProvider"
+			>
+		>,
 ): RuntimeTrpcContext["runtimeApi"] {
 	return createRuntimeApi({
 		...deps,
+		// Default to Worktree Mode so existing tests keep exercising today's
+		// existing-or-ensure worktree resolution through the real provider, which
+		// forwards to the mocked `task-worktree.js#resolveTaskCwd`.
+		loadEffectiveWorktreesEnabled: deps.loadEffectiveWorktreesEnabled ?? (async () => true),
+		resolveTaskWorkspaceProvider: deps.resolveTaskWorkspaceProvider ?? createTaskWorkspaceProvider,
 		getUpdateStatus:
 			deps.getUpdateStatus ??
 			vi.fn(() => ({
@@ -190,6 +204,9 @@ function createRuntimeConfigState(): RuntimeConfigState {
 		openPrPromptTemplateDefault: "pr",
 		globalConfigPath: "/tmp/global-config.json",
 		projectConfigPath: "/tmp/project-config.json",
+		globalWorktreesEnabled: null,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: false,
 	};
 }
 

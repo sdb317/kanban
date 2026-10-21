@@ -59,6 +59,9 @@ function createRuntimeConfigResponse(
 		openPrPromptTemplate: "",
 		commitPromptTemplateDefault: "",
 		openPrPromptTemplateDefault: "",
+		globalWorktreesEnabled: true,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: true,
 	};
 	return {
 		...nextConfig,

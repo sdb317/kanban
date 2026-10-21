@@ -31,6 +31,19 @@ interface UseReviewAutoActionsOptions {
 		options?: RequestMoveTaskToTrashOptions,
 	) => Promise<void>;
 	resetKey?: string | null;
+	/**
+	 * Master gate for the whole hook. When `false`, all pending timers are
+	 * cleared and evaluation is skipped entirely. Defaults to `true`.
+	 */
+	enabled?: boolean;
+	/**
+	 * Effective worktree setting. `null` means the project config has not
+	 * loaded yet. On a loaded `false → true` transition, the task ids already
+	 * in review are snapshotted into a suppressed set so Auto_Review does not
+	 * fire for them, and each id is dropped once its task leaves review.
+	 * Defaults to `true` (Worktree Mode).
+	 */
+	worktreesEnabled?: boolean | null;
 }
 
 export function useReviewAutoActions({
@@ -39,8 +52,11 @@ export function useReviewAutoActions({
 	runAutoReviewGitAction,
 	requestMoveTaskToTrash,
 	resetKey,
+	enabled = true,
+	worktreesEnabled = true,
 }: UseReviewAutoActionsOptions): void {
 	const boardRef = useRef<BoardData>(board);
+	const enabledRef = useRef<boolean>(enabled);
 	const runAutoReviewGitActionRef = useRef(runAutoReviewGitAction);
 	const requestMoveTaskToTrashRef = useRef(requestMoveTaskToTrash);
 	const awaitingCleanActionByTaskIdRef = useRef<Record<string, TaskGitAction>>({});
@@ -48,6 +64,13 @@ export function useReviewAutoActions({
 	type ScheduledAutoReviewAction = TaskAutoReviewMode | "move_to_done_after_git_action";
 	const scheduledActionByTaskIdRef = useRef<Record<string, ScheduledAutoReviewAction>>({});
 	const moveToTrashInFlightTaskIdsRef = useRef<Set<string>>(new Set());
+	// Task ids that were already in review when the effective worktree setting
+	// transitioned from a loaded `false` to `true`. Auto_Review is suppressed
+	// for these ids until their task leaves the review column (Requirement 7.8).
+	const suppressedReviewTaskIdsRef = useRef<Set<string>>(new Set());
+	// Previous `worktreesEnabled` value, used to detect a loaded false → true
+	// transition. `undefined` means "no prior render observed yet".
+	const previousWorktreesEnabledRef = useRef<boolean | null | undefined>(undefined);
 
 	useEffect(() => {
 		boardRef.current = board;
@@ -108,10 +131,49 @@ export function useReviewAutoActions({
 
 	useEffect(() => {
 		clearAllAutoReviewState();
+		suppressedReviewTaskIdsRef.current.clear();
 	}, [clearAllAutoReviewState, resetKey]);
+
+	// Master gate. When disabled, clear every pending timer so no scheduled
+	// action fires, and skip evaluation (guarded via `enabledRef` inside
+	// `evaluateAutoReview`).
+	useEffect(() => {
+		enabledRef.current = enabled;
+		if (!enabled) {
+			clearAllAutoReviewState();
+		}
+	}, [enabled, clearAllAutoReviewState]);
+
+	// Detect a loaded `false → true` transition of the effective worktree
+	// setting. On such a transition, snapshot the task ids currently in review
+	// into the suppressed set so Auto_Review never fires for tasks that were
+	// already in review at the time of the change (Requirement 7.8). A fresh
+	// page load in Worktree Mode (`null → true`) is NOT a transition and must
+	// behave as today (Requirement 13.5), so we only react to a prior loaded
+	// `false` value.
+	useEffect(() => {
+		const previous = previousWorktreesEnabledRef.current;
+		previousWorktreesEnabledRef.current = worktreesEnabled;
+		if (previous === false && worktreesEnabled === true) {
+			const reviewTaskIds = new Set<string>();
+			for (const column of boardRef.current.columns) {
+				if (column.id !== "review") {
+					continue;
+				}
+				for (const card of column.cards) {
+					reviewTaskIds.add(card.id);
+				}
+			}
+			suppressedReviewTaskIdsRef.current = reviewTaskIds;
+		}
+	}, [worktreesEnabled]);
 
 	const evaluateAutoReview = useCallback(
 		(_trigger: { source: string; taskId?: string }) => {
+			if (!enabledRef.current) {
+				return;
+			}
+
 			const columnByTaskId = new Map<string, BoardColumnId>();
 			const reviewCardsForAutomation: BoardCard[] = [];
 			for (const column of boardRef.current.columns) {
@@ -119,6 +181,17 @@ export function useReviewAutoActions({
 					columnByTaskId.set(card.id, column.id);
 					if (column.id === "review") {
 						reviewCardsForAutomation.push(card);
+					}
+				}
+			}
+
+			// Drop suppressed ids whose task has left the review column so a
+			// later re-entry (after the false → true change) is eligible again
+			// for Auto_Review (Requirement 7.8).
+			if (suppressedReviewTaskIdsRef.current.size > 0) {
+				for (const taskId of suppressedReviewTaskIdsRef.current) {
+					if (columnByTaskId.get(taskId) !== "review") {
+						suppressedReviewTaskIdsRef.current.delete(taskId);
 					}
 				}
 			}
@@ -146,6 +219,14 @@ export function useReviewAutoActions({
 			}
 
 			for (const reviewTask of reviewCardsForAutomation) {
+				if (suppressedReviewTaskIdsRef.current.has(reviewTask.id)) {
+					// This task was already in review at the false → true change;
+					// leave it untouched until it leaves review.
+					delete awaitingCleanActionByTaskIdRef.current[reviewTask.id];
+					clearAutoReviewTimer(reviewTask.id);
+					continue;
+				}
+
 				const autoReviewEnabled = isTaskAutoReviewEnabled(reviewTask);
 				if (!autoReviewEnabled) {
 					delete awaitingCleanActionByTaskIdRef.current[reviewTask.id];
@@ -235,7 +316,7 @@ export function useReviewAutoActions({
 		evaluateAutoReview({
 			source: "board_or_loading_change",
 		});
-	}, [board, evaluateAutoReview, taskGitActionLoadingByTaskId]);
+	}, [board, evaluateAutoReview, taskGitActionLoadingByTaskId, enabled, worktreesEnabled]);
 
 	useEffect(() => {
 		return subscribeToAnyTaskMetadata((taskId) => {

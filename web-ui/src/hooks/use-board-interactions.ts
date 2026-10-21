@@ -77,6 +77,16 @@ interface UseBoardInteractionsInput {
 	readyForReviewNotificationsEnabled: boolean;
 	taskGitActionLoadingByTaskId: Record<string, TaskGitActionLoadingStateLike>;
 	runAutoReviewGitAction: (taskId: string, action: TaskGitAction) => Promise<boolean>;
+	/**
+	 * Master gate for Auto_Review. `false` in In-Place Mode so all auto-review
+	 * timers are cleared and evaluation is skipped. Defaults to `true`.
+	 */
+	autoReviewEnabled?: boolean;
+	/**
+	 * Effective worktree setting (`null` while the project config is loading).
+	 * Drives the loaded `false → true` auto-review suppression. Defaults to `true`.
+	 */
+	worktreesEnabled?: boolean | null;
 }
 
 export interface UseBoardInteractionsResult {
@@ -121,6 +131,8 @@ export function useBoardInteractions({
 	readyForReviewNotificationsEnabled,
 	taskGitActionLoadingByTaskId,
 	runAutoReviewGitAction,
+	autoReviewEnabled = true,
+	worktreesEnabled = true,
 }: UseBoardInteractionsInput): UseBoardInteractionsResult {
 	const previousSessionsRef = useRef<Record<string, RuntimeTaskSessionSummary>>({});
 	const notificationPermissionPromptInFlightRef = useRef(false);
@@ -537,6 +549,8 @@ export function useBoardInteractions({
 		runAutoReviewGitAction,
 		requestMoveTaskToTrash: requestMoveTaskToTrashWithAnimation,
 		resetKey: currentProjectId,
+		enabled: autoReviewEnabled,
+		worktreesEnabled,
 	});
 
 	const resumeTaskFromTrash = useCallback(

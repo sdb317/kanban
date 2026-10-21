@@ -159,6 +159,7 @@ describe.sequential("shutdown coordinator integration", () => {
 					closeRuntimeServer: async () => {
 						didCloseRuntimeServer = true;
 					},
+					loadEffectiveWorktreesEnabled: async () => true,
 				});
 
 				expect(didCloseRuntimeServer).toBe(true);

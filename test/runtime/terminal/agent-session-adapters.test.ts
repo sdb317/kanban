@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { resolveHomeAgentAppendSystemPrompt } from "../../../src/prompts/append-system-prompt";
 import { prepareAgentLaunch } from "../../../src/terminal/agent-session-adapters";
 import { expectedShellCommandLine } from "../../utilities/shell-quote";
 
@@ -132,6 +133,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 			args: [],
 			cwd: "/tmp",
 			prompt: "",
+			appendSystemPrompt: resolveHomeAgentAppendSystemPrompt("__home_agent__:workspace-1:claude"),
 		});
 
 		const appendPromptIndex = launch.args.indexOf("--append-system-prompt");
@@ -152,6 +154,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 			args: [],
 			cwd: "/tmp",
 			prompt: "",
+			appendSystemPrompt: resolveHomeAgentAppendSystemPrompt("__home_agent__:workspace-1:codex"),
 		});
 
 		const developerInstructions = getCodexConfigOverrideValues(launch.args, "developer_instructions");

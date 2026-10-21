@@ -4,6 +4,7 @@
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClineTaskMessage, ClineTaskSessionService } from "../cline-sdk/cline-task-session-service";
+import { loadEffectiveWorktreesEnabled } from "../config/effective-worktree-mode";
 import type {
 	RuntimeClineMcpServerAuthStatus,
 	RuntimeStateStreamClineSessionContextUpdatedMessage,
@@ -73,6 +74,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 	let clineSessionContextVersion = 0;
 	const runtimeStateWebSocketServer = new WebSocketServer({ noServer: true });
 	const workspaceMetadataMonitor = createWorkspaceMetadataMonitor({
+		loadEffectiveWorktreesEnabled,
 		onMetadataUpdated: (workspaceId, workspaceMetadata) => {
 			const clients = runtimeStateClientsByWorkspaceId.get(workspaceId);
 			if (!clients || clients.size === 0) {

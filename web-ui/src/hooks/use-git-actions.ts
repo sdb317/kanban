@@ -44,6 +44,13 @@ interface UseGitActionsInput {
 	fetchTaskWorkspaceInfo: (task: BoardCard) => Promise<RuntimeTaskWorkspaceInfoResponse | null>;
 	isGitHistoryOpen: boolean;
 	refreshWorkspaceState: () => Promise<void>;
+	/**
+	 * Whether Git actions are active. In In-Place Mode (`worktreesEnabled !== true`) this is
+	 * `false`, which turns sync, checkout, discard, and commit/PR actions into no-ops and skips
+	 * Git history refreshes so the Web UI issues zero Git endpoint calls (Req 7.1, 8.4). Defaults
+	 * to `true` to preserve existing Worktree Mode behavior (Req 8.5).
+	 */
+	enabled?: boolean;
 }
 
 export interface UseGitActionsResult {
@@ -94,6 +101,7 @@ export function useGitActions({
 	fetchTaskWorkspaceInfo,
 	isGitHistoryOpen,
 	refreshWorkspaceState,
+	enabled = true,
 }: UseGitActionsInput): UseGitActionsResult {
 	const [runningGitAction, setRunningGitAction] = useState<RuntimeGitSyncAction | null>(null);
 	const [taskGitActionLoadingByTaskId, setTaskGitActionLoadingByTaskId] = useState<
@@ -145,7 +153,7 @@ export function useGitActions({
 		taskScope: gitHistoryTaskScope,
 		gitSummary: gitHistorySummary,
 		stateVersion: gitHistoryStateVersion,
-		enabled: isGitHistoryOpen,
+		enabled: enabled && isGitHistoryOpen,
 	});
 	const refreshGitHistory = gitHistory.refresh;
 
@@ -220,6 +228,9 @@ export function useGitActions({
 
 	const runTaskGitAction = useCallback(
 		async (taskId: string, action: TaskGitAction, source: TaskGitActionSource) => {
+			if (!enabled) {
+				return false;
+			}
 			const taskLoadingState = taskGitActionLoadingByTaskId[taskId];
 			const actionInFlightSource = action === "commit" ? taskLoadingState?.commitSource : taskLoadingState?.prSource;
 			if (actionInFlightSource !== null && actionInFlightSource !== undefined) {
@@ -329,6 +340,7 @@ export function useGitActions({
 		},
 		[
 			board,
+			enabled,
 			fetchTaskWorkspaceInfo,
 			runtimeProjectConfig,
 			sendTaskChatMessage,
@@ -369,7 +381,7 @@ export function useGitActions({
 
 	const runGitAction = useCallback(
 		async (action: RuntimeGitSyncAction) => {
-			if (!currentProjectId || runningGitAction || isSwitchingHomeBranch) {
+			if (!enabled || !currentProjectId || runningGitAction || isSwitchingHomeBranch) {
 				return;
 			}
 			setRunningGitAction(action);
@@ -403,14 +415,20 @@ export function useGitActions({
 				setRunningGitAction(null);
 			}
 		},
-		[currentProjectId, isSwitchingHomeBranch, refreshGitHistory, runningGitAction],
+		[currentProjectId, enabled, isSwitchingHomeBranch, refreshGitHistory, runningGitAction],
 	);
 
 	const switchHomeBranch = useCallback(
 		async (branch: string) => {
 			const normalizedBranch = branch.trim();
 			const currentBranch = homeGitSummary?.currentBranch ?? null;
-			if (!currentProjectId || isSwitchingHomeBranch || !normalizedBranch || normalizedBranch === currentBranch) {
+			if (
+				!enabled ||
+				!currentProjectId ||
+				isSwitchingHomeBranch ||
+				!normalizedBranch ||
+				normalizedBranch === currentBranch
+			) {
 				return;
 			}
 			setIsSwitchingHomeBranch(true);
@@ -450,6 +468,7 @@ export function useGitActions({
 		},
 		[
 			currentProjectId,
+			enabled,
 			homeGitSummary?.currentBranch,
 			isSwitchingHomeBranch,
 			refreshGitHistory,
@@ -458,7 +477,7 @@ export function useGitActions({
 	);
 
 	const discardHomeWorkingChanges = useCallback(async () => {
-		if (!currentProjectId || isDiscardingHomeWorkingChanges) {
+		if (!enabled || !currentProjectId || isDiscardingHomeWorkingChanges) {
 			return;
 		}
 		setIsDiscardingHomeWorkingChanges(true);
@@ -496,7 +515,7 @@ export function useGitActions({
 		} finally {
 			setIsDiscardingHomeWorkingChanges(false);
 		}
-	}, [currentProjectId, isDiscardingHomeWorkingChanges, refreshGitHistory]);
+	}, [currentProjectId, enabled, isDiscardingHomeWorkingChanges, refreshGitHistory]);
 
 	const runAutoReviewGitAction = useCallback(
 		async (taskId: string, action: TaskGitAction) => {

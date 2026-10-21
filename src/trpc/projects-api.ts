@@ -49,6 +49,19 @@ export interface CreateProjectsApiDependencies {
 		options?: DisposeWorkspaceOptions,
 	) => { terminalManager: TerminalSessionManager | null; workspacePath: string | null };
 	collectProjectWorktreeTaskIdsForRemoval: (board: RuntimeBoardData) => Set<string>;
+	/**
+	 * Effective worktree mode from the global config only (ignores any project
+	 * override). Add-project cannot consult a project override because the
+	 * project is not registered yet, so the git-initialization flow keys off the
+	 * global setting (Req 10.4, 10.5, 14.3).
+	 */
+	loadGlobalWorktreesEnabled: () => Promise<boolean>;
+	/**
+	 * Effective worktree mode for an already-registered project. Used by
+	 * `removeProject` so task worktree cleanup only runs in Worktree Mode
+	 * (Req 12.4, 14.3).
+	 */
+	loadEffectiveWorktreesEnabled: (projectPath: string) => Promise<boolean>;
 	warn: (message: string) => void;
 	buildProjectsPayload: (preferredCurrentProjectId: string | null) => Promise<{
 		currentProjectId: string | null;
@@ -99,31 +112,38 @@ export function createProjectsApi(deps: CreateProjectsApiDependencies): RuntimeT
 					projectPath = deps.resolveProjectInputPath(body.path as string, resolveBasePath);
 				}
 				await deps.assertPathIsDirectory(projectPath);
-				if (!deps.hasGitRepository(projectPath)) {
-					if (!body.initializeGit) {
-						return {
-							ok: false,
-							project: null,
-							requiresGitInitialization: true,
-							error: "This folder is not a git repository. Cline requires git to manage worktrees. Initialize git to continue.",
-						} satisfies RuntimeProjectAddResponse;
-					}
-					const initResult = await initializeGitRepository(projectPath);
-					if (!initResult.ok) {
-						return {
-							ok: false,
-							project: null,
-							error: initResult.error ?? "Failed to initialize git repository.",
-						} satisfies RuntimeProjectAddResponse;
-					}
-				} else {
-					const commitResult = await ensureInitialCommit(projectPath);
-					if (!commitResult.ok) {
-						return {
-							ok: false,
-							project: null,
-							error: commitResult.error ?? "Failed to ensure initial commit.",
-						} satisfies RuntimeProjectAddResponse;
+				// In-Place Mode (global worktrees off) registers folders as-is: no
+				// git-initialization prompt, no `git init`, and no initial commit, so
+				// non-git folders work without any git setup (Req 10.4, 14.3). Worktree
+				// Mode keeps today's flow (Req 10.5). `assertPathIsDirectory` runs first
+				// in both modes (Req 10.10).
+				if (await deps.loadGlobalWorktreesEnabled()) {
+					if (!deps.hasGitRepository(projectPath)) {
+						if (!body.initializeGit) {
+							return {
+								ok: false,
+								project: null,
+								requiresGitInitialization: true,
+								error: "This folder is not a git repository. Cline requires git to manage worktrees. Initialize git to continue.",
+							} satisfies RuntimeProjectAddResponse;
+						}
+						const initResult = await initializeGitRepository(projectPath);
+						if (!initResult.ok) {
+							return {
+								ok: false,
+								project: null,
+								error: initResult.error ?? "Failed to initialize git repository.",
+							} satisfies RuntimeProjectAddResponse;
+						}
+					} else {
+						const commitResult = await ensureInitialCommit(projectPath);
+						if (!commitResult.ok) {
+							return {
+								ok: false,
+								project: null,
+								error: commitResult.error ?? "Failed to ensure initial commit.",
+							} satisfies RuntimeProjectAddResponse;
+						}
 					}
 				}
 				const context = await loadWorkspaceContext(projectPath);
@@ -167,14 +187,21 @@ export function createProjectsApi(deps: CreateProjectsApiDependencies): RuntimeT
 					};
 				}
 
+				// Task worktree cleanup only applies in Worktree Mode. In In-Place Mode
+				// there are no managed worktrees to delete, and the Runtime must not run
+				// any git/filesystem cleanup against the project on removal
+				// (Req 12.4, 14.3).
+				const worktreesEnabled = await deps.loadEffectiveWorktreesEnabled(projectToRemove.repoPath);
 				const taskIdsToCleanup = new Set<string>();
-				try {
-					const workspaceState = await loadWorkspaceState(projectToRemove.repoPath);
-					for (const taskId of deps.collectProjectWorktreeTaskIdsForRemoval(workspaceState.board)) {
-						taskIdsToCleanup.add(taskId);
+				if (worktreesEnabled) {
+					try {
+						const workspaceState = await loadWorkspaceState(projectToRemove.repoPath);
+						for (const taskId of deps.collectProjectWorktreeTaskIdsForRemoval(workspaceState.board)) {
+							taskIdsToCleanup.add(taskId);
+						}
+					} catch {
+						// Best effort: if board state cannot be read, skip worktree cleanup IDs.
 					}
-				} catch {
-					// Best effort: if board state cannot be read, skip worktree cleanup IDs.
 				}
 
 				const removedTerminalManager = deps.getTerminalManagerForWorkspace(body.projectId);

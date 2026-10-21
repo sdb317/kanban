@@ -7,6 +7,7 @@ import * as RadixSelect from "@radix-ui/react-select";
 import * as RadixSwitch from "@radix-ui/react-switch";
 import { getRuntimeAgentCatalogEntry, getRuntimeLaunchSupportedAgentCatalog } from "@runtime-agent-catalog";
 import { areRuntimeProjectShortcutsEqual } from "@runtime-shortcuts";
+import { WORKTREES_REQUIRE_GIT_MESSAGE } from "@runtime-worktree-setting";
 import {
 	Bell,
 	Bot,
@@ -24,6 +25,12 @@ import {
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	buildWorktreeSaveRequest,
+	type ProjectWorktreeOverrideChoice,
+	resolveProjectOverrideChoice,
+} from "@/components/settings/build-worktree-save-request";
+import { WorktreeSettingsSection } from "@/components/settings/worktree-settings-section";
 import { AccountOrganizationSection } from "@/components/shared/account-organization-section";
 import { ClineSetupSection } from "@/components/shared/cline-setup-section";
 import {
@@ -375,6 +382,8 @@ export function RuntimeSettingsDialog({
 	const [shortcuts, setShortcuts] = useState<RuntimeProjectShortcut[]>([]);
 	const [commitPromptTemplate, setCommitPromptTemplate] = useState("");
 	const [openPrPromptTemplate, setOpenPrPromptTemplate] = useState("");
+	const [draftGlobalWorktreesEnabled, setDraftGlobalWorktreesEnabled] = useState(false);
+	const [draftProjectOverride, setDraftProjectOverride] = useState<ProjectWorktreeOverrideChoice | null>(null);
 	const [selectedPromptVariant, setSelectedPromptVariant] = useState<TaskGitAction>("commit");
 	const [copiedVariableToken, setCopiedVariableToken] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -432,9 +441,17 @@ export function RuntimeSettingsDialog({
 		}));
 	}, [agentAutonomousModeEnabled, config?.agents]);
 	const displayedAgents = useMemo(() => supportedAgents, [supportedAgents]);
+	// Effective setting given the current drafts; drives the commit/PR template visibility (Req 7.7).
+	const effectiveWorktreesEnabled =
+		draftProjectOverride === "on" ? true : draftProjectOverride === "off" ? false : draftGlobalWorktreesEnabled;
 	const navItems = useMemo(
-		() => SETTINGS_NAV_ITEMS.filter((item) => !item.clineOnly || selectedAgentId === "cline"),
-		[selectedAgentId],
+		() =>
+			SETTINGS_NAV_ITEMS.filter(
+				(item) =>
+					(!item.clineOnly || selectedAgentId === "cline") &&
+					(item.id !== "git-prompts" || effectiveWorktreesEnabled),
+			),
+		[effectiveWorktreesEnabled, selectedAgentId],
 	);
 	const configuredAgentId = config?.selectedAgentId ?? null;
 	const firstInstalledAgentId = displayedAgents.find((agent) => agent.installed)?.id;
@@ -445,6 +462,11 @@ export function RuntimeSettingsDialog({
 	const initialShortcuts = config?.shortcuts ?? [];
 	const initialCommitPromptTemplate = config?.commitPromptTemplate ?? "";
 	const initialOpenPrPromptTemplate = config?.openPrPromptTemplate ?? "";
+	const initialGlobalWorktreesEnabled = config?.globalWorktreesEnabled === true;
+	const hasProjectConfig = config?.projectConfigPath != null;
+	const initialProjectOverride: ProjectWorktreeOverrideChoice | null = hasProjectConfig
+		? resolveProjectOverrideChoice(config?.projectWorktreesEnabled ?? null)
+		: null;
 	const clineSettings = useRuntimeSettingsClineController({
 		open,
 		workspaceId,
@@ -482,6 +504,12 @@ export function RuntimeSettingsDialog({
 		if (!areRuntimeProjectShortcutsEqual(shortcuts, initialShortcuts)) {
 			return true;
 		}
+		if (draftGlobalWorktreesEnabled !== initialGlobalWorktreesEnabled) {
+			return true;
+		}
+		if (draftProjectOverride !== initialProjectOverride) {
+			return true;
+		}
 		if (
 			normalizeTemplateForComparison(commitPromptTemplate) !==
 			normalizeTemplateForComparison(initialCommitPromptTemplate)
@@ -498,10 +526,14 @@ export function RuntimeSettingsDialog({
 		clineSettings.hasUnsavedChanges,
 		commitPromptTemplate,
 		config,
+		draftGlobalWorktreesEnabled,
+		draftProjectOverride,
 		draftThemeId,
 		initialAgentAutonomousModeEnabled,
 		initialCommitPromptTemplate,
+		initialGlobalWorktreesEnabled,
 		initialOpenPrPromptTemplate,
+		initialProjectOverride,
 		initialReadyForReviewNotificationsEnabled,
 		initialSelectedAgentId,
 		initialShortcuts,
@@ -522,11 +554,20 @@ export function RuntimeSettingsDialog({
 		setShortcuts(config?.shortcuts ?? []);
 		setCommitPromptTemplate(config?.commitPromptTemplate ?? "");
 		setOpenPrPromptTemplate(config?.openPrPromptTemplate ?? "");
+		setDraftGlobalWorktreesEnabled(config?.globalWorktreesEnabled === true);
+		setDraftProjectOverride(
+			config?.projectConfigPath != null
+				? resolveProjectOverrideChoice(config?.projectWorktreesEnabled ?? null)
+				: null,
+		);
 		setSaveError(null);
 	}, [
 		config?.agentAutonomousModeEnabled,
 		config?.commitPromptTemplate,
+		config?.globalWorktreesEnabled,
 		config?.openPrPromptTemplate,
+		config?.projectConfigPath,
+		config?.projectWorktreesEnabled,
 		config?.readyForReviewNotificationsEnabled,
 		config?.selectedAgentId,
 		config?.shortcuts,
@@ -697,16 +738,38 @@ export function RuntimeSettingsDialog({
 				return;
 			}
 		}
-		const saved = await save({
+		const worktreeSaveRequest = buildWorktreeSaveRequest(
+			{
+				globalWorktreesEnabled: config.globalWorktreesEnabled,
+				projectWorktreesEnabled: config.projectWorktreesEnabled,
+			},
+			{
+				globalWorktreesEnabled: draftGlobalWorktreesEnabled,
+				projectOverride: draftProjectOverride,
+			},
+		);
+		const saveResult = await save({
 			selectedAgentId,
 			agentAutonomousModeEnabled,
 			readyForReviewNotificationsEnabled,
 			shortcuts,
 			commitPromptTemplate,
 			openPrPromptTemplate,
+			...worktreeSaveRequest,
 		});
-		if (!saved) {
-			setSaveError("Could not save runtime settings. Check runtime logs and try again.");
+		if (!saveResult.ok) {
+			const message = saveResult.error instanceof Error ? saveResult.error.message : String(saveResult.error);
+			const trimmedMessage = message.trim();
+			if (trimmedMessage.includes(WORKTREES_REQUIRE_GIT_MESSAGE)) {
+				// Surface the worktrees-require-git guard verbatim so it reads as actionable guidance (Req 2.7, 2.8).
+				setSaveError(WORKTREES_REQUIRE_GIT_MESSAGE);
+				return;
+			}
+			setSaveError(
+				trimmedMessage.length > 0
+					? `Could not save runtime settings: ${trimmedMessage}`
+					: "Could not save runtime settings. Check runtime logs and try again.",
+			);
 			return;
 		}
 		if (draftThemeId !== initialThemeId) {
@@ -814,6 +877,14 @@ export function RuntimeSettingsDialog({
 						</p>
 					</div>
 
+					<WorktreeSettingsSection
+						globalWorktreesEnabled={draftGlobalWorktreesEnabled}
+						onGlobalWorktreesEnabledChange={setDraftGlobalWorktreesEnabled}
+						projectOverride={draftProjectOverride}
+						onProjectOverrideChange={setDraftProjectOverride}
+						disabled={controlsDisabled}
+					/>
+
 					{/* ---- Cline ---- */}
 					{selectedAgentId === "cline" ? (
 						<>
@@ -847,65 +918,70 @@ export function RuntimeSettingsDialog({
 					) : null}
 
 					{/* ---- Git Prompts ---- */}
-					<div data-settings-section="git-prompts" />
-					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
-						<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
-							<GitCommit size={16} className="text-text-secondary" />
-							Git Prompts
-						</h2>
-					</div>
-					<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
-						<p className="text-text-secondary text-[13px] mt-0 mb-2">
-							Modify the prompts sent to the agent when using Commit or Make PR on tasks in Review.
-						</p>
-						<div className="flex items-center justify-between gap-2 mb-2">
-							<NativeSelect
-								value={selectedPromptVariant}
-								onChange={(event) => setSelectedPromptVariant(event.target.value as TaskGitAction)}
-								disabled={controlsDisabled}
-								style={{ minWidth: 220 }}
-							>
-								{GIT_PROMPT_VARIANT_OPTIONS.map((option) => (
-									<option key={option.value} value={option.value}>
-										{option.label}
-									</option>
-								))}
-							</NativeSelect>
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={handleResetSelectedPrompt}
-								disabled={controlsDisabled || isSelectedPromptAtDefault}
-							>
-								Reset
-							</Button>
-						</div>
-						<textarea
-							rows={5}
-							value={selectedPromptValue}
-							onChange={(event) => handleSelectedPromptChange(event.target.value)}
-							placeholder={selectedPromptPlaceholder}
-							disabled={controlsDisabled}
-							className="w-full rounded-md border border-border bg-surface-2 p-3 text-[13px] text-text-primary font-mono placeholder:text-text-tertiary focus:border-border-focus focus:outline-none resize-none disabled:opacity-40"
-						/>
-						<p className="text-text-secondary text-[13px] mt-2 mb-0">
-							Use{" "}
-							<InlineUtilityButton
-								text={
-									copiedVariableToken === TASK_GIT_BASE_REF_PROMPT_VARIABLE.token
-										? "Copied!"
-										: TASK_GIT_BASE_REF_PROMPT_VARIABLE.token
-								}
-								monospace
-								widthCh={Math.max(TASK_GIT_BASE_REF_PROMPT_VARIABLE.token.length, "Copied!".length) + 2}
-								onClick={() => {
-									handleCopyVariableToken(TASK_GIT_BASE_REF_PROMPT_VARIABLE.token);
-								}}
-								disabled={controlsDisabled}
-							/>{" "}
-							to reference {TASK_GIT_BASE_REF_PROMPT_VARIABLE.description}
-						</p>
-					</div>
+					{/* Hidden in In-Place Mode; loaded template values are still sent unchanged on save (Req 7.7). */}
+					{effectiveWorktreesEnabled ? (
+						<>
+							<div data-settings-section="git-prompts" />
+							<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
+								<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
+									<GitCommit size={16} className="text-text-secondary" />
+									Git Prompts
+								</h2>
+							</div>
+							<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
+								<p className="text-text-secondary text-[13px] mt-0 mb-2">
+									Modify the prompts sent to the agent when using Commit or Make PR on tasks in Review.
+								</p>
+								<div className="flex items-center justify-between gap-2 mb-2">
+									<NativeSelect
+										value={selectedPromptVariant}
+										onChange={(event) => setSelectedPromptVariant(event.target.value as TaskGitAction)}
+										disabled={controlsDisabled}
+										style={{ minWidth: 220 }}
+									>
+										{GIT_PROMPT_VARIANT_OPTIONS.map((option) => (
+											<option key={option.value} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</NativeSelect>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleResetSelectedPrompt}
+										disabled={controlsDisabled || isSelectedPromptAtDefault}
+									>
+										Reset
+									</Button>
+								</div>
+								<textarea
+									rows={5}
+									value={selectedPromptValue}
+									onChange={(event) => handleSelectedPromptChange(event.target.value)}
+									placeholder={selectedPromptPlaceholder}
+									disabled={controlsDisabled}
+									className="w-full rounded-md border border-border bg-surface-2 p-3 text-[13px] text-text-primary font-mono placeholder:text-text-tertiary focus:border-border-focus focus:outline-none resize-none disabled:opacity-40"
+								/>
+								<p className="text-text-secondary text-[13px] mt-2 mb-0">
+									Use{" "}
+									<InlineUtilityButton
+										text={
+											copiedVariableToken === TASK_GIT_BASE_REF_PROMPT_VARIABLE.token
+												? "Copied!"
+												: TASK_GIT_BASE_REF_PROMPT_VARIABLE.token
+										}
+										monospace
+										widthCh={Math.max(TASK_GIT_BASE_REF_PROMPT_VARIABLE.token.length, "Copied!".length) + 2}
+										onClick={() => {
+											handleCopyVariableToken(TASK_GIT_BASE_REF_PROMPT_VARIABLE.token);
+										}}
+										disabled={controlsDisabled}
+									/>{" "}
+									to reference {TASK_GIT_BASE_REF_PROMPT_VARIABLE.description}
+								</p>
+							</div>
+						</>
+					) : null}
 
 					{/* ---- Notifications ---- */}
 					<div data-settings-section="notifications" />

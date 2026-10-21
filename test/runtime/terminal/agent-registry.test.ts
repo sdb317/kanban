@@ -28,6 +28,9 @@ function createRuntimeConfigState(overrides: Partial<RuntimeConfigState> = {}): 
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",
 		openPrPromptTemplateDefault: "pr",
+		globalWorktreesEnabled: null,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: false,
 		...overrides,
 	};
 }

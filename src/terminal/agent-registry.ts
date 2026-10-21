@@ -124,5 +124,8 @@ export function buildRuntimeConfigResponse(
 		openPrPromptTemplate: runtimeConfig.openPrPromptTemplate,
 		commitPromptTemplateDefault: runtimeConfig.commitPromptTemplateDefault,
 		openPrPromptTemplateDefault: runtimeConfig.openPrPromptTemplateDefault,
+		globalWorktreesEnabled: runtimeConfig.globalWorktreesEnabled,
+		projectWorktreesEnabled: runtimeConfig.projectWorktreesEnabled,
+		worktreesEnabled: runtimeConfig.worktreesEnabled,
 	};
 }

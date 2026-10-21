@@ -114,6 +114,9 @@ function createRuntimeConfig(overrides: Partial<RuntimeConfigResponse> = {}): Ru
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",
 		openPrPromptTemplateDefault: "pr",
+		globalWorktreesEnabled: true,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: true,
 		...overrides,
 	};
 }

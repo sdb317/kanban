@@ -16,6 +16,7 @@ import { cn } from "@/components/ui/cn";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
+import { useWorktreeMode } from "@/runtime/worktree-mode";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
 import type { BoardCard as BoardCardModel, BoardColumnId } from "@/types";
 import { getTaskAutoReviewCancelButtonLabel } from "@/types";
@@ -259,6 +260,7 @@ export function BoardCard({
 	workspacePath?: string | null;
 	defaultClineModelId?: string | null;
 }): React.ReactElement {
+	const { isWorktreeMode } = useWorktreeMode();
 	const [isHovered, setIsHovered] = useState(false);
 	const [isEditingTitle, setIsEditingTitle] = useState(false);
 	const [draftTitle, setDraftTitle] = useState(card.title);
@@ -417,19 +419,23 @@ export function BoardCard({
 			? reconstructTaskWorktreeDisplayPath(card.id, workspacePath)
 			: null;
 	const reviewRefLabel = reviewWorkspaceSnapshot?.branch ?? reviewWorkspaceSnapshot?.headCommit?.slice(0, 8) ?? "HEAD";
-	const reviewChangeSummary = reviewWorkspaceSnapshot
-		? reviewWorkspaceSnapshot.changedFiles == null
-			? null
-			: {
-					filesLabel: `${reviewWorkspaceSnapshot.changedFiles} ${reviewWorkspaceSnapshot.changedFiles === 1 ? "file" : "files"}`,
-					additions: reviewWorkspaceSnapshot.additions ?? 0,
-					deletions: reviewWorkspaceSnapshot.deletions ?? 0,
-				}
-		: null;
-	const showReviewGitActions = columnId === "review" && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
+	const reviewChangeSummary =
+		isWorktreeMode && reviewWorkspaceSnapshot
+			? reviewWorkspaceSnapshot.changedFiles == null
+				? null
+				: {
+						filesLabel: `${reviewWorkspaceSnapshot.changedFiles} ${reviewWorkspaceSnapshot.changedFiles === 1 ? "file" : "files"}`,
+						additions: reviewWorkspaceSnapshot.additions ?? 0,
+						deletions: reviewWorkspaceSnapshot.deletions ?? 0,
+					}
+			: null;
+	const showReviewGitActions =
+		isWorktreeMode && columnId === "review" && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
 	const isAnyGitActionLoading = isCommitLoading || isOpenPrLoading;
 	const cancelAutomaticActionLabel =
-		!isTrashCard && card.autoReviewEnabled ? getTaskAutoReviewCancelButtonLabel(card.autoReviewMode) : null;
+		isWorktreeMode && !isTrashCard && card.autoReviewEnabled
+			? getTaskAutoReviewCancelButtonLabel(card.autoReviewMode)
+			: null;
 	const agentOverrideLabel = useMemo(
 		() => (card.agentId ? (getRuntimeAgentCatalogEntry(card.agentId)?.label ?? card.agentId) : null),
 		[card.agentId],

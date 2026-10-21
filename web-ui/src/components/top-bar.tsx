@@ -30,6 +30,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import type { RuntimeGitSyncAction, RuntimeProjectShortcut } from "@/runtime/types";
+import { useWorktreeMode } from "@/runtime/worktree-mode";
 import {
 	useHomeGitSummaryValue,
 	useTaskWorkspaceInfoValue,
@@ -350,6 +351,7 @@ export function TopBar({
 	hideProjectDependentActions?: boolean;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
+	const { isWorktreeMode } = useWorktreeMode();
 	const displayWorkspacePath = workspacePath ? formatPathForDisplay(workspacePath) : null;
 	const workspaceSegments = displayWorkspacePath ? getWorkspacePathSegments(displayWorkspacePath) : [];
 	const hasAbsoluteLeadingSlash = Boolean(displayWorkspacePath?.startsWith("/"));
@@ -500,7 +502,7 @@ export function TopBar({
 									</span>
 								)
 							) : null}
-							{!hideProjectDependentActions ? (
+							{!hideProjectDependentActions && isWorktreeMode ? (
 								<TopBarGitStatusSection
 									showHomeGitSummary={showHomeGitSummary === true}
 									selectedTaskId={selectedTaskId ?? null}

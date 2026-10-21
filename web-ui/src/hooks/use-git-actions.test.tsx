@@ -113,6 +113,9 @@ function createRuntimeConfig(selectedAgentId: RuntimeConfigResponse["selectedAge
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",
 		openPrPromptTemplateDefault: "pr",
+		globalWorktreesEnabled: true,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: true,
 	};
 }
 
@@ -147,6 +150,7 @@ function HookHarness({
 		fetchTaskWorkspaceInfo: async () => createWorkspaceInfo(),
 		isGitHistoryOpen: false,
 		refreshWorkspaceState: async () => {},
+		enabled: true,
 	});
 
 	useEffect(() => {

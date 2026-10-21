@@ -69,6 +69,7 @@ import { useRuntimeProjectConfig } from "@/runtime/use-runtime-project-config";
 import { useTerminalConnectionReady } from "@/runtime/use-terminal-connection-ready";
 import { useWorkspacePersistence } from "@/runtime/use-workspace-persistence";
 import { saveWorkspaceState } from "@/runtime/workspace-state-query";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
 import { applyTaskDetailClineSettingsChange, findCardSelection } from "@/state/board-state";
 import {
 	getTaskWorkspaceInfo,
@@ -136,6 +137,8 @@ export default function App(): ReactElement {
 		isLoading: isRuntimeProjectConfigLoading,
 		refresh: refreshRuntimeProjectConfig,
 	} = useRuntimeProjectConfig(currentProjectId);
+	const worktreesEnabled = runtimeProjectConfig?.worktreesEnabled ?? null;
+	const isWorktreeMode = worktreesEnabled === true;
 	const { isBlocked: isKanbanAccessBlocked, refresh: refreshKanbanAccess } = useKanbanAccessGate({
 		workspaceId: currentProjectId,
 	});
@@ -392,6 +395,7 @@ export default function App(): ReactElement {
 		fetchTaskWorkspaceInfo,
 		isGitHistoryOpen,
 		refreshWorkspaceState,
+		enabled: isWorktreeMode,
 	});
 	const agentCommand = runtimeProjectConfig?.effectiveCommand ?? null;
 	const {
@@ -549,14 +553,22 @@ export default function App(): ReactElement {
 		setIsSettingsOpen(true);
 	}, []);
 	const handleToggleGitHistory = useCallback(() => {
-		if (hasNoProjects) {
+		if (hasNoProjects || !isWorktreeMode) {
 			return;
 		}
 		setIsGitHistoryOpen((current) => !current);
-	}, [hasNoProjects]);
+	}, [hasNoProjects, isWorktreeMode]);
 	const handleCloseGitHistory = useCallback(() => {
 		setIsGitHistoryOpen(false);
 	}, []);
+
+	// When a project switches into In-Place Mode, close any open git history view
+	// so the underlying board or detail content is shown (Req 8.6).
+	useEffect(() => {
+		if (!isWorktreeMode) {
+			setIsGitHistoryOpen(false);
+		}
+	}, [isWorktreeMode]);
 
 	const {
 		handleProgrammaticCardMoveReady,
@@ -597,6 +609,8 @@ export default function App(): ReactElement {
 		readyForReviewNotificationsEnabled,
 		taskGitActionLoadingByTaskId,
 		runAutoReviewGitAction,
+		autoReviewEnabled: isWorktreeMode,
+		worktreesEnabled,
 	});
 
 	const {
@@ -620,6 +634,7 @@ export default function App(): ReactElement {
 		isHomeTerminalOpen: showHomeBottomTerminal,
 		isHomeGitHistoryOpen: !selectedCard && isGitHistoryOpen,
 		canUseCreateTaskShortcut: !hasNoProjects && currentProjectId !== null,
+		isGitHistoryEnabled: isWorktreeMode,
 		handleToggleDetailTerminal,
 		handleToggleHomeTerminal,
 		handleToggleExpandDetailTerminal,
@@ -778,6 +793,7 @@ export default function App(): ReactElement {
 			autoReviewMode={editTaskAutoReviewMode}
 			onAutoReviewModeChange={setEditTaskAutoReviewMode}
 			workspaceId={currentProjectId}
+			workspaceGit={workspaceGit}
 			branchRef={editTaskBranchRef}
 			branchOptions={createTaskBranchOptions}
 			onBranchRefChange={setEditTaskBranchRef}
@@ -830,257 +846,261 @@ export default function App(): ReactElement {
 						setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
 					/>
 				) : null}
-				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-					<TopBar
-						onToggleSidebar={!selectedCard ? handleToggleSidebar : undefined}
-						onBack={selectedCard ? handleBack : undefined}
-						workspacePath={navbarWorkspacePath}
-						isWorkspacePathLoading={shouldShowProjectLoadingState}
-						workspaceHint={navbarWorkspaceHint}
-						runtimeHint={navbarRuntimeHint}
-						selectedTaskId={selectedCard?.card.id ?? null}
-						selectedTaskBaseRef={selectedCard?.card.baseRef ?? null}
-						showHomeGitSummary={!hasNoProjects && !selectedCard}
-						runningGitAction={selectedCard || hasNoProjects ? null : runningGitAction}
-						onGitFetch={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("fetch");
-									}
-						}
-						onGitPull={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("pull");
-									}
-						}
-						onGitPush={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("push");
-									}
-						}
-						onToggleTerminal={
-							hasNoProjects ? undefined : selectedCard ? handleToggleDetailTerminal : handleToggleHomeTerminal
-						}
-						isTerminalOpen={selectedCard ? isDetailTerminalOpen : showHomeBottomTerminal}
-						isTerminalLoading={selectedCard ? isDetailTerminalStarting : isHomeTerminalStarting}
-						onOpenSettings={handleOpenSettings}
-						showDebugButton={debugModeEnabled}
-						onOpenDebugDialog={debugModeEnabled ? handleOpenDebugDialog : undefined}
-						shortcuts={shortcuts}
-						selectedShortcutLabel={selectedShortcutLabel}
-						onSelectShortcutLabel={handleSelectShortcutLabel}
-						runningShortcutLabel={runningShortcutLabel}
-						onRunShortcut={handleRunShortcut}
-						onCreateFirstShortcut={currentProjectId ? handleCreateShortcut : undefined}
-						openTargetOptions={openTargetOptions}
-						selectedOpenTargetId={selectedOpenTargetId}
-						onSelectOpenTarget={onSelectOpenTarget}
-						onOpenWorkspace={onOpenWorkspace}
-						canOpenWorkspace={canOpenWorkspace}
-						isOpeningWorkspace={isOpeningWorkspace}
-						onToggleGitHistory={hasNoProjects ? undefined : handleToggleGitHistory}
-						isGitHistoryOpen={isGitHistoryOpen}
-						hideProjectDependentActions={shouldHideProjectDependentTopBarActions}
-					/>
-					<div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
-						<div
-							className="kb-home-layout"
-							aria-hidden={selectedCard ? true : undefined}
-							style={selectedCard ? { visibility: "hidden" } : undefined}
-						>
-							{shouldShowProjectLoadingState ? (
-								<div className="flex flex-1 min-h-0 items-center justify-center bg-surface-0">
-									<Spinner size={30} />
-								</div>
-							) : hasNoProjects ? (
-								<div className="flex flex-1 min-h-0 items-center justify-center bg-surface-0 p-6">
-									<div className="flex flex-col items-center justify-center gap-3 text-text-tertiary">
-										<FolderOpen size={48} strokeWidth={1} />
-										<h3 className="text-sm font-semibold text-text-primary">No projects yet</h3>
-										<p className="text-[13px] text-text-secondary">
-											Add a git repository to start using Kanban.
-										</p>
-										<Button
-											variant="primary"
-											onClick={() => {
-												void handleAddProject();
-											}}
-										>
-											Add Project
-										</Button>
+				<WorktreeModeProvider value={worktreesEnabled}>
+					<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+						<TopBar
+							onToggleSidebar={!selectedCard ? handleToggleSidebar : undefined}
+							onBack={selectedCard ? handleBack : undefined}
+							workspacePath={navbarWorkspacePath}
+							isWorkspacePathLoading={shouldShowProjectLoadingState}
+							workspaceHint={navbarWorkspaceHint}
+							runtimeHint={navbarRuntimeHint}
+							selectedTaskId={selectedCard?.card.id ?? null}
+							selectedTaskBaseRef={selectedCard?.card.baseRef ?? null}
+							showHomeGitSummary={!hasNoProjects && !selectedCard}
+							runningGitAction={selectedCard || hasNoProjects ? null : runningGitAction}
+							onGitFetch={
+								selectedCard
+									? undefined
+									: () => {
+											void runGitAction("fetch");
+										}
+							}
+							onGitPull={
+								selectedCard
+									? undefined
+									: () => {
+											void runGitAction("pull");
+										}
+							}
+							onGitPush={
+								selectedCard
+									? undefined
+									: () => {
+											void runGitAction("push");
+										}
+							}
+							onToggleTerminal={
+								hasNoProjects ? undefined : selectedCard ? handleToggleDetailTerminal : handleToggleHomeTerminal
+							}
+							isTerminalOpen={selectedCard ? isDetailTerminalOpen : showHomeBottomTerminal}
+							isTerminalLoading={selectedCard ? isDetailTerminalStarting : isHomeTerminalStarting}
+							onOpenSettings={handleOpenSettings}
+							showDebugButton={debugModeEnabled}
+							onOpenDebugDialog={debugModeEnabled ? handleOpenDebugDialog : undefined}
+							shortcuts={shortcuts}
+							selectedShortcutLabel={selectedShortcutLabel}
+							onSelectShortcutLabel={handleSelectShortcutLabel}
+							runningShortcutLabel={runningShortcutLabel}
+							onRunShortcut={handleRunShortcut}
+							onCreateFirstShortcut={currentProjectId ? handleCreateShortcut : undefined}
+							openTargetOptions={openTargetOptions}
+							selectedOpenTargetId={selectedOpenTargetId}
+							onSelectOpenTarget={onSelectOpenTarget}
+							onOpenWorkspace={onOpenWorkspace}
+							canOpenWorkspace={canOpenWorkspace}
+							isOpeningWorkspace={isOpeningWorkspace}
+							onToggleGitHistory={hasNoProjects ? undefined : handleToggleGitHistory}
+							isGitHistoryOpen={isGitHistoryOpen}
+							hideProjectDependentActions={shouldHideProjectDependentTopBarActions}
+						/>
+						<div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+							<div
+								className="kb-home-layout"
+								aria-hidden={selectedCard ? true : undefined}
+								style={selectedCard ? { visibility: "hidden" } : undefined}
+							>
+								{shouldShowProjectLoadingState ? (
+									<div className="flex flex-1 min-h-0 items-center justify-center bg-surface-0">
+										<Spinner size={30} />
 									</div>
-								</div>
-							) : (
-								<div className="flex flex-1 flex-col min-h-0 min-w-0">
-									<div className="flex flex-1 min-h-0 min-w-0">
-										{isGitHistoryOpen ? (
-											<GitHistoryView
-												workspaceId={currentProjectId}
-												gitHistory={gitHistory}
-												onCheckoutBranch={(branch) => {
-													void switchHomeBranch(branch);
-												}}
-												onDiscardWorkingChanges={() => {
-													void discardHomeWorkingChanges();
-												}}
-												isDiscardWorkingChangesPending={isDiscardingHomeWorkingChanges}
-											/>
-										) : (
-											<KanbanBoard
-												data={board}
-												taskSessions={sessions}
-												workspacePath={workspacePath}
-												onCardSelect={handleCardSelect}
-												onCreateTask={handleOpenCreateTask}
-												onStartTask={handleStartTaskFromBoard}
-												onStartAllTasks={handleStartAllBacklogTasksFromBoard}
-												onClearTrash={handleOpenClearTrash}
-												editingTaskId={editingTaskId}
-												inlineTaskEditor={inlineTaskEditor}
-												onEditTask={handleOpenEditTask}
-												onSaveTaskTitle={handleSaveTaskTitle}
-												onCommitTask={handleCommitTask}
-												onOpenPrTask={handleOpenPrTask}
-												onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
-												commitTaskLoadingById={commitTaskLoadingById}
-												openPrTaskLoadingById={openPrTaskLoadingById}
-												moveToTrashLoadingById={moveToTrashLoadingById}
-												onMoveToTrashTask={handleMoveReviewCardToTrash}
-												onRestoreFromTrashTask={handleRestoreTaskFromTrash}
-												dependencies={board.dependencies}
-												onCreateDependency={handleCreateDependency}
-												onDeleteDependency={handleDeleteDependency}
-												onRequestProgrammaticCardMoveReady={
-													selectedCard ? undefined : handleProgrammaticCardMoveReady
-												}
-												onDragEnd={handleDragEnd}
-												defaultClineModelId={runtimeProjectConfig?.clineProviderSettings?.modelId ?? null}
-											/>
-										)}
-									</div>
-									{showHomeBottomTerminal ? (
-										<ResizableBottomPane
-											minHeight={200}
-											initialHeight={homeTerminalPaneHeight}
-											onHeightChange={setHomeTerminalPaneHeight}
-											onCollapse={collapseHomeTerminal}
-											isExpanded={isHomeTerminalExpanded}
-										>
-											<div
-												style={{
-													display: "flex",
-													flex: "1 1 0",
-													minWidth: 0,
-													paddingLeft: 12,
-													paddingRight: 12,
+								) : hasNoProjects ? (
+									<div className="flex flex-1 min-h-0 items-center justify-center bg-surface-0 p-6">
+										<div className="flex flex-col items-center justify-center gap-3 text-text-tertiary">
+											<FolderOpen size={48} strokeWidth={1} />
+											<h3 className="text-sm font-semibold text-text-primary">No projects yet</h3>
+											<p className="text-[13px] text-text-secondary">
+												Add a git repository to start using Kanban.
+											</p>
+											<Button
+												variant="primary"
+												onClick={() => {
+													void handleAddProject();
 												}}
 											>
-												<AgentTerminalPanel
-													key={`home-shell-${homeTerminalTaskId}`}
-													taskId={homeTerminalTaskId}
+												Add Project
+											</Button>
+										</div>
+									</div>
+								) : (
+									<div className="flex flex-1 flex-col min-h-0 min-w-0">
+										<div className="flex flex-1 min-h-0 min-w-0">
+											{isWorktreeMode && isGitHistoryOpen ? (
+												<GitHistoryView
 													workspaceId={currentProjectId}
-													summary={homeTerminalSummary}
-													onSummary={upsertSession}
-													showSessionToolbar={false}
-													autoFocus
-													onClose={closeHomeTerminal}
-													minimalHeaderTitle="Terminal"
-													minimalHeaderSubtitle={homeTerminalSubtitle}
-													panelBackgroundColor="var(--color-surface-1)"
-													terminalBackgroundColor={terminalThemeColors.surfaceRaised}
-													cursorColor={terminalThemeColors.textPrimary}
-													onConnectionReady={markTerminalConnectionReady}
-													agentCommand={agentCommand}
-													onSendAgentCommand={handleSendAgentCommandToHomeTerminal}
-													isExpanded={isHomeTerminalExpanded}
-													onToggleExpand={handleToggleExpandHomeTerminal}
+													gitHistory={gitHistory}
+													onCheckoutBranch={(branch) => {
+														void switchHomeBranch(branch);
+													}}
+													onDiscardWorkingChanges={() => {
+														void discardHomeWorkingChanges();
+													}}
+													isDiscardWorkingChangesPending={isDiscardingHomeWorkingChanges}
 												/>
-											</div>
-										</ResizableBottomPane>
-									) : null}
-								</div>
-							)}
-						</div>
-						{selectedCard && detailSession ? (
-							<div className="absolute inset-0 flex min-h-0 min-w-0">
-								<CardDetailView
-									selection={selectedCard}
-									currentProjectId={currentProjectId}
-									workspacePath={workspacePath}
-									selectedAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
-									runtimeConfig={runtimeProjectConfig ?? null}
-									sessionSummary={detailSession}
-									taskSessions={sessions}
-									onSessionSummary={upsertSession}
-									onCardSelect={handleCardSelect}
-									onTaskDragEnd={handleDetailTaskDragEnd}
-									onCreateTask={handleOpenCreateTask}
-									onStartTask={handleStartTaskFromBoard}
-									onStartAllTasks={handleStartAllBacklogTasksFromBoard}
-									onClearTrash={handleOpenClearTrash}
-									editingTaskId={editingTaskId}
-									inlineTaskEditor={inlineTaskEditor}
-									onEditTask={(task) => {
-										handleOpenEditTask(task, { preserveDetailSelection: true });
-									}}
-									onSaveTaskTitle={handleSaveTaskTitle}
-									onCommitTask={handleCommitTask}
-									onOpenPrTask={handleOpenPrTask}
-									onAgentCommitTask={handleAgentCommitTask}
-									onAgentOpenPrTask={handleAgentOpenPrTask}
-									commitTaskLoadingById={commitTaskLoadingById}
-									openPrTaskLoadingById={openPrTaskLoadingById}
-									agentCommitTaskLoadingById={agentCommitTaskLoadingById}
-									agentOpenPrTaskLoadingById={agentOpenPrTaskLoadingById}
-									moveToTrashLoadingById={moveToTrashLoadingById}
-									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
-									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
-									onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
-									onAddReviewComments={(taskId: string, text: string) => {
-										void handleAddReviewComments(taskId, text);
-									}}
-									onSendReviewComments={(taskId: string, text: string) => {
-										void handleSendReviewComments(taskId, text);
-									}}
-									onSendClineChatMessage={sendTaskChatMessage}
-									onCancelClineChatTurn={cancelTaskChatTurn}
-									onLoadClineChatMessages={fetchTaskChatMessages}
-									latestClineChatMessage={latestSelectedTaskChatMessage}
-									streamedClineChatMessages={selectedTaskChatMessages}
-									onMoveToTrash={handleMoveToTrash}
-									isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
-									gitHistoryPanel={
-										isGitHistoryOpen ? (
-											<GitHistoryView workspaceId={currentProjectId} gitHistory={gitHistory} />
-										) : undefined
-									}
-									onCloseGitHistory={handleCloseGitHistory}
-									bottomTerminalOpen={isDetailTerminalOpen}
-									bottomTerminalTaskId={detailTerminalTaskId}
-									bottomTerminalSummary={detailTerminalSummary}
-									bottomTerminalSubtitle={detailTerminalSubtitle}
-									onBottomTerminalClose={closeDetailTerminal}
-									onBottomTerminalCollapse={collapseDetailTerminal}
-									bottomTerminalPaneHeight={detailTerminalPaneHeight}
-									onBottomTerminalPaneHeightChange={setDetailTerminalPaneHeight}
-									onBottomTerminalConnectionReady={markTerminalConnectionReady}
-									bottomTerminalAgentCommand={agentCommand}
-									onBottomTerminalSendAgentCommand={handleSendAgentCommandToDetailTerminal}
-									isBottomTerminalExpanded={isDetailTerminalExpanded}
-									onBottomTerminalToggleExpand={handleToggleExpandDetailTerminal}
-									isDocumentVisible={isDocumentVisible}
-									onClineSettingsSaved={refreshRuntimeProjectConfig}
-									onTaskClineSettingsChanged={handleClineTaskSettingsChangedForTask}
-								/>
+											) : (
+												<KanbanBoard
+													data={board}
+													taskSessions={sessions}
+													workspacePath={workspacePath}
+													onCardSelect={handleCardSelect}
+													onCreateTask={handleOpenCreateTask}
+													onStartTask={handleStartTaskFromBoard}
+													onStartAllTasks={handleStartAllBacklogTasksFromBoard}
+													onClearTrash={handleOpenClearTrash}
+													editingTaskId={editingTaskId}
+													inlineTaskEditor={inlineTaskEditor}
+													onEditTask={handleOpenEditTask}
+													onSaveTaskTitle={handleSaveTaskTitle}
+													onCommitTask={handleCommitTask}
+													onOpenPrTask={handleOpenPrTask}
+													onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
+													commitTaskLoadingById={commitTaskLoadingById}
+													openPrTaskLoadingById={openPrTaskLoadingById}
+													moveToTrashLoadingById={moveToTrashLoadingById}
+													onMoveToTrashTask={handleMoveReviewCardToTrash}
+													onRestoreFromTrashTask={handleRestoreTaskFromTrash}
+													dependencies={board.dependencies}
+													onCreateDependency={handleCreateDependency}
+													onDeleteDependency={handleDeleteDependency}
+													onRequestProgrammaticCardMoveReady={
+														selectedCard ? undefined : handleProgrammaticCardMoveReady
+													}
+													onDragEnd={handleDragEnd}
+													defaultClineModelId={
+														runtimeProjectConfig?.clineProviderSettings?.modelId ?? null
+													}
+												/>
+											)}
+										</div>
+										{showHomeBottomTerminal ? (
+											<ResizableBottomPane
+												minHeight={200}
+												initialHeight={homeTerminalPaneHeight}
+												onHeightChange={setHomeTerminalPaneHeight}
+												onCollapse={collapseHomeTerminal}
+												isExpanded={isHomeTerminalExpanded}
+											>
+												<div
+													style={{
+														display: "flex",
+														flex: "1 1 0",
+														minWidth: 0,
+														paddingLeft: 12,
+														paddingRight: 12,
+													}}
+												>
+													<AgentTerminalPanel
+														key={`home-shell-${homeTerminalTaskId}`}
+														taskId={homeTerminalTaskId}
+														workspaceId={currentProjectId}
+														summary={homeTerminalSummary}
+														onSummary={upsertSession}
+														showSessionToolbar={false}
+														autoFocus
+														onClose={closeHomeTerminal}
+														minimalHeaderTitle="Terminal"
+														minimalHeaderSubtitle={homeTerminalSubtitle}
+														panelBackgroundColor="var(--color-surface-1)"
+														terminalBackgroundColor={terminalThemeColors.surfaceRaised}
+														cursorColor={terminalThemeColors.textPrimary}
+														onConnectionReady={markTerminalConnectionReady}
+														agentCommand={agentCommand}
+														onSendAgentCommand={handleSendAgentCommandToHomeTerminal}
+														isExpanded={isHomeTerminalExpanded}
+														onToggleExpand={handleToggleExpandHomeTerminal}
+													/>
+												</div>
+											</ResizableBottomPane>
+										) : null}
+									</div>
+								)}
 							</div>
-						) : null}
+							{selectedCard && detailSession ? (
+								<div className="absolute inset-0 flex min-h-0 min-w-0">
+									<CardDetailView
+										selection={selectedCard}
+										currentProjectId={currentProjectId}
+										workspacePath={workspacePath}
+										selectedAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
+										runtimeConfig={runtimeProjectConfig ?? null}
+										sessionSummary={detailSession}
+										taskSessions={sessions}
+										onSessionSummary={upsertSession}
+										onCardSelect={handleCardSelect}
+										onTaskDragEnd={handleDetailTaskDragEnd}
+										onCreateTask={handleOpenCreateTask}
+										onStartTask={handleStartTaskFromBoard}
+										onStartAllTasks={handleStartAllBacklogTasksFromBoard}
+										onClearTrash={handleOpenClearTrash}
+										editingTaskId={editingTaskId}
+										inlineTaskEditor={inlineTaskEditor}
+										onEditTask={(task) => {
+											handleOpenEditTask(task, { preserveDetailSelection: true });
+										}}
+										onSaveTaskTitle={handleSaveTaskTitle}
+										onCommitTask={handleCommitTask}
+										onOpenPrTask={handleOpenPrTask}
+										onAgentCommitTask={handleAgentCommitTask}
+										onAgentOpenPrTask={handleAgentOpenPrTask}
+										commitTaskLoadingById={commitTaskLoadingById}
+										openPrTaskLoadingById={openPrTaskLoadingById}
+										agentCommitTaskLoadingById={agentCommitTaskLoadingById}
+										agentOpenPrTaskLoadingById={agentOpenPrTaskLoadingById}
+										moveToTrashLoadingById={moveToTrashLoadingById}
+										onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
+										onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
+										onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
+										onAddReviewComments={(taskId: string, text: string) => {
+											void handleAddReviewComments(taskId, text);
+										}}
+										onSendReviewComments={(taskId: string, text: string) => {
+											void handleSendReviewComments(taskId, text);
+										}}
+										onSendClineChatMessage={sendTaskChatMessage}
+										onCancelClineChatTurn={cancelTaskChatTurn}
+										onLoadClineChatMessages={fetchTaskChatMessages}
+										latestClineChatMessage={latestSelectedTaskChatMessage}
+										streamedClineChatMessages={selectedTaskChatMessages}
+										onMoveToTrash={handleMoveToTrash}
+										isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
+										gitHistoryPanel={
+											isWorktreeMode && isGitHistoryOpen ? (
+												<GitHistoryView workspaceId={currentProjectId} gitHistory={gitHistory} />
+											) : undefined
+										}
+										onCloseGitHistory={handleCloseGitHistory}
+										bottomTerminalOpen={isDetailTerminalOpen}
+										bottomTerminalTaskId={detailTerminalTaskId}
+										bottomTerminalSummary={detailTerminalSummary}
+										bottomTerminalSubtitle={detailTerminalSubtitle}
+										onBottomTerminalClose={closeDetailTerminal}
+										onBottomTerminalCollapse={collapseDetailTerminal}
+										bottomTerminalPaneHeight={detailTerminalPaneHeight}
+										onBottomTerminalPaneHeightChange={setDetailTerminalPaneHeight}
+										onBottomTerminalConnectionReady={markTerminalConnectionReady}
+										bottomTerminalAgentCommand={agentCommand}
+										onBottomTerminalSendAgentCommand={handleSendAgentCommandToDetailTerminal}
+										isBottomTerminalExpanded={isDetailTerminalExpanded}
+										onBottomTerminalToggleExpand={handleToggleExpandDetailTerminal}
+										isDocumentVisible={isDocumentVisible}
+										onClineSettingsSaved={refreshRuntimeProjectConfig}
+										onTaskClineSettingsChanged={handleClineTaskSettingsChangedForTask}
+									/>
+								</div>
+							) : null}
+						</div>
 					</div>
-				</div>
+				</WorktreeModeProvider>
 				<RuntimeSettingsDialog
 					open={isSettingsOpen}
 					workspaceId={settingsWorkspaceId}
@@ -1126,6 +1146,7 @@ export default function App(): ReactElement {
 					autoReviewMode={newTaskAutoReviewMode}
 					onAutoReviewModeChange={setNewTaskAutoReviewMode}
 					workspaceId={currentProjectId}
+					workspaceGit={workspaceGit}
 					branchRef={newTaskBranchRef}
 					branchOptions={createTaskBranchOptions}
 					onBranchRefChange={setNewTaskBranchRef}

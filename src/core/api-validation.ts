@@ -80,6 +80,15 @@ function parseWithSchema<T>(schema: z.ZodType<T>, value: unknown): T {
 	return parsed.data;
 }
 
+/**
+ * Options for request parsers that validate a `baseRef`. In-Place Workspace Mode
+ * accepts an empty `baseRef`; the default (`false`) preserves the non-empty
+ * validation used by Worktree Mode.
+ */
+export interface ParseBaseRefOptions {
+	allowEmptyBaseRef?: boolean;
+}
+
 export function parseWorkspaceChangesRequest(query: URLSearchParams): RuntimeWorkspaceChangesRequest {
 	const taskId = parseWithSchema(
 		requiredTrimmedStringSchema("Missing taskId query parameter."),
@@ -147,14 +156,17 @@ export function parseGitCheckoutRequest(value: unknown): RuntimeGitCheckoutReque
 	};
 }
 
-export function parseWorktreeEnsureRequest(value: unknown): RuntimeWorktreeEnsureRequest {
+export function parseWorktreeEnsureRequest(
+	value: unknown,
+	options: ParseBaseRefOptions = {},
+): RuntimeWorktreeEnsureRequest {
 	const parsed = parseWithSchema(runtimeWorktreeEnsureRequestSchema, value);
 	const taskId = parsed.taskId.trim();
 	if (!taskId) {
 		throw new Error("Invalid worktree ensure payload.");
 	}
 	const baseRef = parsed.baseRef.trim();
-	if (!baseRef) {
+	if (!baseRef && !options.allowEmptyBaseRef) {
 		throw new Error("Invalid worktree ensure payload.");
 	}
 	return {
@@ -218,14 +230,17 @@ export function parseCommandRunRequest(value: unknown): RuntimeCommandRunRequest
 	};
 }
 
-export function parseTaskSessionStartRequest(value: unknown): RuntimeTaskSessionStartRequest {
+export function parseTaskSessionStartRequest(
+	value: unknown,
+	options: ParseBaseRefOptions = {},
+): RuntimeTaskSessionStartRequest {
 	const parsed = parseWithSchema(runtimeTaskSessionStartRequestSchema, value);
 	const taskId = parsed.taskId.trim();
 	if (!taskId) {
 		throw new Error("Task session taskId cannot be empty.");
 	}
 	const baseRef = parsed.baseRef.trim();
-	if (!baseRef) {
+	if (!baseRef && !options.allowEmptyBaseRef) {
 		throw new Error("Task session baseRef cannot be empty.");
 	}
 	return {
@@ -538,7 +553,10 @@ export function parseClineDeviceAuthCompleteRequest(value: unknown): RuntimeClin
 	};
 }
 
-export function parseShellSessionStartRequest(value: unknown): RuntimeShellSessionStartRequest {
+export function parseShellSessionStartRequest(
+	value: unknown,
+	options: ParseBaseRefOptions = {},
+): RuntimeShellSessionStartRequest {
 	const parsed = parseWithSchema(runtimeShellSessionStartRequestSchema, value);
 	const taskId = parsed.taskId.trim();
 	if (!taskId) {
@@ -549,7 +567,7 @@ export function parseShellSessionStartRequest(value: unknown): RuntimeShellSessi
 	}
 	const workspaceTaskId = parsed.workspaceTaskId?.trim() || undefined;
 	const baseRef = parsed.baseRef.trim();
-	if (!baseRef) {
+	if (!baseRef && !options.allowEmptyBaseRef) {
 		throw new Error("Shell session baseRef cannot be empty.");
 	}
 	return {

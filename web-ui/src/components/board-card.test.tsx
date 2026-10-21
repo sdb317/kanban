@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardCard } from "@/components/board-card";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
 import type { ReviewTaskWorkspaceSnapshot } from "@/types";
 
 let mockWorkspaceSnapshot: ReviewTaskWorkspaceSnapshot | undefined;
@@ -152,7 +153,14 @@ describe("BoardCard", () => {
 		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 		container = document.createElement("div");
 		document.body.appendChild(container);
-		root = createRoot(container);
+		const reactRoot = createRoot(container);
+		// Every BoardCard render runs in Worktree Mode so existing assertions
+		// about review git actions and auto-review controls still hold.
+		root = {
+			render: (children: ReactNode) =>
+				reactRoot.render(<WorktreeModeProvider value={true}>{children}</WorktreeModeProvider>),
+			unmount: () => reactRoot.unmount(),
+		};
 		vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({
 			x: 0,
 			y: 0,

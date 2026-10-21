@@ -1,6 +1,6 @@
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import type { Command } from "commander";
-
+import { resolveInPlaceDefaultBaseRef } from "../config/worktree-setting";
 import type {
 	RuntimeAgentId,
 	RuntimeBoardCard,
@@ -321,6 +321,13 @@ function resolveTaskBaseRef(state: RuntimeWorkspaceStateResponse): string {
 	return state.git.currentBranch ?? state.git.defaultBranch ?? state.git.branches[0] ?? "";
 }
 
+async function loadWorkspaceWorktreesEnabled(
+	runtimeClient: ReturnType<typeof createRuntimeTrpcClient>,
+): Promise<boolean> {
+	const config = await runtimeClient.runtime.getConfig.query();
+	return config.worktreesEnabled;
+}
+
 function findTaskRecord(
 	state: RuntimeWorkspaceStateResponse,
 	taskId: string,
@@ -487,10 +494,17 @@ async function createTask(input: {
 	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
 	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
 	const runtimeClient = createRuntimeTrpcClient(workspaceId);
+	const worktreesEnabled = await loadWorkspaceWorktreesEnabled(runtimeClient);
 	const created = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (state) => {
-		const resolvedBaseRef = (input.baseRef ?? "").trim() || resolveTaskBaseRef(state);
-		if (!resolvedBaseRef) {
-			throw new Error("Could not determine task base branch for this workspace.");
+		const suppliedBaseRef = (input.baseRef ?? "").trim();
+		let resolvedBaseRef: string;
+		if (worktreesEnabled) {
+			resolvedBaseRef = suppliedBaseRef || resolveTaskBaseRef(state);
+			if (!resolvedBaseRef) {
+				throw new Error("Could not determine task base branch for this workspace.");
+			}
+		} else {
+			resolvedBaseRef = suppliedBaseRef || resolveInPlaceDefaultBaseRef(state.git);
 		}
 		const result = addTaskToColumn(
 			state.board,

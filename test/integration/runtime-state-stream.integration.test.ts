@@ -28,6 +28,7 @@ import type {
 } from "../../src/core/api-contract";
 import { createGitTestEnv } from "../utilities/git-env";
 import { createTempDir } from "../utilities/temp-dir";
+import { enableWorktreesForTest } from "../utilities/worktree-mode";
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -459,6 +460,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("starts outside a git repository with no active workspace", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-no-git-");
 		const { path: nonGitPath, cleanup: cleanupNonGitPath } = createTempDir("kanban-no-git-");
+		enableWorktreesForTest(tempHome);
 
 		const port = await getAvailablePort();
 		const server = await startKanbanServer({
@@ -501,6 +503,7 @@ describe.sequential("runtime state stream integration", () => {
 
 	it("starts from the home directory with no active workspace", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-home-dir-launch-");
+		enableWorktreesForTest(tempHome);
 
 		const port = await getAvailablePort();
 		const server = await startKanbanServer({
@@ -543,6 +546,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("launches outside git using the first indexed project", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-first-project-");
 		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-first-project-");
+		enableWorktreesForTest(tempHome);
 
 		const projectAPath = join(tempRoot, "project-a");
 		const projectBPath = join(tempRoot, "project-b");
@@ -626,6 +630,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("requires explicit confirmation before initializing git for a non-git added project", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-project-add-git-confirm-");
 		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-project-add-git-confirm-");
+		enableWorktreesForTest(tempHome);
 
 		const projectAPath = join(tempRoot, "project-a");
 		const nonGitPath = join(tempRoot, "non-git-project");
@@ -693,6 +698,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("streams per-project snapshots and isolates workspace updates", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-stream-");
 		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-projects-stream-");
+		enableWorktreesForTest(tempHome);
 
 		const projectAPath = join(tempRoot, "project-a");
 		const projectBPath = join(tempRoot, "project-b");
@@ -814,6 +820,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("emits task_ready_for_review when hook review event is ingested", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-hook-stream-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-hook-stream-");
+		enableWorktreesForTest(tempHome);
 
 		mkdirSync(projectPath, { recursive: true });
 		initGitRepository(projectPath);
@@ -895,6 +902,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("streams centralized workspace metadata updates for task worktrees", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-metadata-stream-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-metadata-stream-");
+		enableWorktreesForTest(tempHome);
 
 		mkdirSync(projectPath, { recursive: true });
 		initGitRepository(projectPath);
@@ -1019,6 +1027,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("preserves existing task worktree when base ref advances", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-preserve-worktree-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-preserve-worktree-");
+		enableWorktreesForTest(tempHome);
 
 		mkdirSync(projectPath, { recursive: true });
 		initGitRepository(projectPath);
@@ -1136,6 +1145,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("moves stale completed review cards to trash on shutdown", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-stale-exit-review-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-stale-exit-review-");
+		enableWorktreesForTest(tempHome);
 
 		mkdirSync(projectPath, { recursive: true });
 		initGitRepository(projectPath);
@@ -1255,6 +1265,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("skips stale session shutdown cleanup when --skip-shutdown-cleanup is enabled", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-skip-cleanup-flag-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-skip-cleanup-flag-");
+		enableWorktreesForTest(tempHome);
 
 		mkdirSync(projectPath, { recursive: true });
 		initGitRepository(projectPath);
@@ -1377,6 +1388,7 @@ describe.sequential("runtime state stream integration", () => {
 	it("falls back to remaining project when removing the active project", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-remove-");
 		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-projects-remove-");
+		enableWorktreesForTest(tempHome);
 
 		const projectAPath = join(tempRoot, "project-a");
 		const projectBPath = join(tempRoot, "project-b");

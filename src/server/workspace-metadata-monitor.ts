@@ -37,6 +37,13 @@ interface WorkspaceMetadataEntry {
 
 export interface CreateWorkspaceMetadataMonitorDependencies {
 	onMetadataUpdated: (workspaceId: string, metadata: RuntimeWorkspaceMetadata) => void;
+	/**
+	 * Resolve the effective worktree mode for a project path. In In-Place Mode
+	 * (resolves to `false`) the monitor skips all git polling and publishes empty
+	 * metadata, so no change counts reach the UI. Re-read on every poll tick so a
+	 * settings change takes effect within one interval.
+	 */
+	loadEffectiveWorktreesEnabled: (projectPath: string) => Promise<boolean>;
 }
 
 export interface WorkspaceMetadataMonitor {
@@ -291,6 +298,25 @@ export function createWorkspaceMetadataMonitor(
 
 		entry.refreshPromise = (async () => {
 			const previousSnapshot = buildWorkspaceMetadataSnapshot(entry);
+
+			// Re-read the effective mode every tick so a settings change takes effect
+			// within one poll interval. In In-Place Mode we skip all git polling and
+			// publish empty metadata, so no change counts reach the UI.
+			const worktreesEnabled = await deps.loadEffectiveWorktreesEnabled(entry.workspacePath);
+			if (!worktreesEnabled) {
+				entry.homeGit = {
+					summary: null,
+					stateToken: null,
+					stateVersion: 0,
+				};
+				entry.taskMetadataByTaskId = new Map<string, CachedTaskWorkspaceMetadata>();
+				const emptySnapshot = createEmptyWorkspaceMetadata();
+				if (!areWorkspaceMetadataEqual(previousSnapshot, emptySnapshot)) {
+					deps.onMetadataUpdated(workspaceId, emptySnapshot);
+				}
+				return emptySnapshot;
+			}
+
 			entry.homeGit = await loadHomeGitMetadata(entry);
 
 			const nextTaskEntries = await Promise.all(

@@ -12,6 +12,7 @@ interface UseAppHotkeysInput {
 	isHomeTerminalOpen: boolean;
 	isHomeGitHistoryOpen: boolean;
 	canUseCreateTaskShortcut: boolean;
+	isGitHistoryEnabled?: boolean;
 	handleToggleDetailTerminal: () => void;
 	handleToggleHomeTerminal: () => void;
 	handleToggleExpandDetailTerminal: () => void;
@@ -29,6 +30,7 @@ export function useAppHotkeys({
 	isHomeTerminalOpen,
 	isHomeGitHistoryOpen,
 	canUseCreateTaskShortcut,
+	isGitHistoryEnabled = true,
 	handleToggleDetailTerminal,
 	handleToggleHomeTerminal,
 	handleToggleExpandDetailTerminal,
@@ -112,11 +114,12 @@ export function useAppHotkeys({
 			handleToggleGitHistory();
 		},
 		{
+			enabled: isGitHistoryEnabled,
 			enableOnFormTags: true,
 			enableOnContentEditable: true,
 			preventDefault: true,
 		},
-		[handleToggleGitHistory],
+		[handleToggleGitHistory, isGitHistoryEnabled],
 	);
 
 	useHotkeys(

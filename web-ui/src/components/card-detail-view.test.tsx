@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CardDetailView } from "@/components/card-detail-view";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 import { TERMINAL_THEME_COLORS } from "@/terminal/theme-colors";
 import type { BoardCard, BoardColumn, CardSelection } from "@/types";
@@ -132,6 +133,14 @@ function getLastMockFirstArg<T>(mockFn: { mock: { calls: unknown[][] } }): T {
 	return lastCall?.[0] as T;
 }
 
+/**
+ * Renders the card detail view wrapped in a {@link WorktreeModeProvider} set to
+ * Worktree Mode so these tests keep exercising the full diff/git layout.
+ */
+function renderDetail(root: Root, ui: ReactNode): void {
+	root.render(<WorktreeModeProvider value={true}>{ui}</WorktreeModeProvider>);
+}
+
 function requireResizeSeparator(container: HTMLElement): HTMLElement {
 	const separator = container.querySelector('[aria-label="Resize agent and diff panels"]');
 	if (!(separator instanceof HTMLElement)) {
@@ -223,7 +232,8 @@ describe("CardDetailView", () => {
 
 	it("collapses the expanded diff on Escape without closing the detail view", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -268,7 +278,8 @@ describe("CardDetailView", () => {
 
 	it("clears stale diff content when switching from all changes to last turn", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -306,7 +317,8 @@ describe("CardDetailView", () => {
 
 	it("keeps the active diff mode visually highlighted", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -361,7 +373,8 @@ describe("CardDetailView", () => {
 		const onCloseGitHistory = vi.fn();
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -394,7 +407,8 @@ describe("CardDetailView", () => {
 
 	it("renders native chat panel for cline agent", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -422,7 +436,8 @@ describe("CardDetailView", () => {
 		selection.card.agentId = "codex";
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={selection}
 					currentProjectId="workspace-1"
@@ -446,7 +461,8 @@ describe("CardDetailView", () => {
 
 	it("shows cline chat panel when task session agentId is cline even if global agent is claude", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -484,7 +500,8 @@ describe("CardDetailView", () => {
 
 	it("shows terminal panel when task session agentId is claude even if global agent is cline", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -523,7 +540,8 @@ describe("CardDetailView", () => {
 
 	it("uses surface-primary colors for the detail terminal panel", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -553,7 +571,8 @@ describe("CardDetailView", () => {
 		const onAddReviewComments = vi.fn();
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -588,7 +607,8 @@ describe("CardDetailView", () => {
 		const onSendReviewComments = vi.fn();
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -624,7 +644,8 @@ describe("CardDetailView", () => {
 		window.localStorage.setItem(LocalStorageKey.DetailAgentPanelRatio, "0.62");
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -647,7 +668,8 @@ describe("CardDetailView", () => {
 
 	it("persists the resized agent-to-diff panel ratio globally", async () => {
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -689,9 +711,10 @@ describe("CardDetailView", () => {
 	});
 
 	it("keeps the saved divider position after leaving and reopening task detail", async () => {
-		const renderDetail = async (): Promise<void> => {
+		const mountDetail = async (): Promise<void> => {
 			await act(async () => {
-				root.render(
+				renderDetail(
+					root,
 					<CardDetailView
 						selection={createSelection()}
 						currentProjectId="workspace-1"
@@ -710,7 +733,7 @@ describe("CardDetailView", () => {
 			});
 		};
 
-		await renderDetail();
+		await mountDetail();
 
 		const separator = requireResizeSeparator(container);
 		const dragHandle = separator.firstElementChild;
@@ -732,7 +755,7 @@ describe("CardDetailView", () => {
 			root = createRoot(container);
 		});
 
-		await renderDetail();
+		await mountDetail();
 
 		const restoredWidth = requireAgentPanel(container).style.width;
 		const restoredRatio = Number.parseFloat(restoredWidth) / 100;
@@ -744,7 +767,8 @@ describe("CardDetailView", () => {
 		window.localStorage.setItem(LocalStorageKey.DetailExpandedDiffFileTreePanelRatio, "0.18");
 
 		await act(async () => {
-			root.render(
+			renderDetail(
+				root,
 				<CardDetailView
 					selection={createSelection()}
 					currentProjectId="workspace-1"
@@ -775,5 +799,122 @@ describe("CardDetailView", () => {
 		});
 
 		expect(requireDetailDiffFileTreePanel(container).style.flex).toBe("0 0 18%");
+	});
+
+	describe("In-Place Mode", () => {
+		function renderInPlace(ui: ReactNode): void {
+			root.render(<WorktreeModeProvider value={false}>{ui}</WorktreeModeProvider>);
+		}
+
+		const inPlaceSelection = createSelection();
+
+		it("does not render diff, file tree, git history, or resize handles", async () => {
+			await act(async () => {
+				renderInPlace(
+					<CardDetailView
+						selection={inPlaceSelection}
+						currentProjectId="workspace-1"
+						selectedAgentId="claude"
+						sessionSummary={null}
+						taskSessions={{}}
+						onSessionSummary={() => {}}
+						onCardSelect={() => {}}
+						onTaskDragEnd={() => {}}
+						onMoveToTrash={() => {}}
+						gitHistoryPanel={<div data-testid="git-history-panel">Git history</div>}
+						onCloseGitHistory={() => {}}
+						bottomTerminalOpen={false}
+						bottomTerminalTaskId={null}
+						bottomTerminalSummary={null}
+						onBottomTerminalClose={() => {}}
+					/>,
+				);
+			});
+
+			// Diff mode buttons / toolbar are not mounted.
+			const diffModeButton = Array.from(container.querySelectorAll("button")).find(
+				(button) => button.textContent?.trim() === "All Changes",
+			);
+			expect(diffModeButton).toBeUndefined();
+			// Diff viewer and file tree are not mounted.
+			expect(mockDiffViewerPanel).not.toHaveBeenCalled();
+			expect(container.querySelector('[data-testid="file-tree-panel"]')).toBeNull();
+			// The git history panel is not rendered even when provided.
+			expect(container.querySelector('[data-testid="git-history-panel"]')).toBeNull();
+			// None of the detail resize handles are present.
+			expect(container.querySelector('[aria-label="Resize agent and diff panels"]')).toBeNull();
+			expect(container.querySelector('[aria-label="Resize detail diff panels"]')).toBeNull();
+		});
+
+		it("does not pass commit or PR handlers to the terminal panel", async () => {
+			await act(async () => {
+				renderInPlace(
+					<CardDetailView
+						selection={inPlaceSelection}
+						currentProjectId="workspace-1"
+						selectedAgentId="claude"
+						sessionSummary={null}
+						taskSessions={{}}
+						onSessionSummary={() => {}}
+						onCardSelect={() => {}}
+						onTaskDragEnd={() => {}}
+						onMoveToTrash={() => {}}
+						onAgentCommitTask={() => {}}
+						onAgentOpenPrTask={() => {}}
+						bottomTerminalOpen={false}
+						bottomTerminalTaskId={null}
+						bottomTerminalSummary={null}
+						onBottomTerminalClose={() => {}}
+					/>,
+				);
+			});
+
+			const terminalProps = mockAgentTerminalPanel.mock.calls.at(-1)?.[0] as
+				| { onCommit?: unknown; onOpenPr?: unknown }
+				| undefined;
+			expect(terminalProps).toBeDefined();
+			expect(terminalProps?.onCommit).toBeUndefined();
+			expect(terminalProps?.onOpenPr).toBeUndefined();
+		});
+
+		it("drops the git history panel and shows the full-width view when switching to In-Place Mode", async () => {
+			const detailView = (
+				<CardDetailView
+					selection={inPlaceSelection}
+					currentProjectId="workspace-1"
+					selectedAgentId="claude"
+					sessionSummary={null}
+					taskSessions={{}}
+					onSessionSummary={() => {}}
+					onCardSelect={() => {}}
+					onTaskDragEnd={() => {}}
+					onMoveToTrash={() => {}}
+					gitHistoryPanel={<div data-testid="git-history-panel">Git history</div>}
+					onCloseGitHistory={() => {}}
+					bottomTerminalOpen={false}
+					bottomTerminalTaskId={null}
+					bottomTerminalSummary={null}
+					onBottomTerminalClose={() => {}}
+				/>
+			);
+
+			// Mount in Worktree Mode with git history open — the panel is visible.
+			await act(async () => {
+				root.render(<WorktreeModeProvider value={true}>{detailView}</WorktreeModeProvider>);
+			});
+			expect(container.querySelector('[data-testid="git-history-panel"]')).toBeInstanceOf(HTMLDivElement);
+
+			// Flip to In-Place Mode on the same root (no remount / reload).
+			await act(async () => {
+				root.render(<WorktreeModeProvider value={false}>{detailView}</WorktreeModeProvider>);
+			});
+
+			// The git history panel is gone and the underlying agent view shows at full width.
+			expect(container.querySelector('[data-testid="git-history-panel"]')).toBeNull();
+			expect(mockAgentTerminalPanel).toHaveBeenCalled();
+			// No diff/file-tree chrome in the In-Place layout.
+			expect(container.querySelector('[data-testid="file-tree-panel"]')).toBeNull();
+			expect(container.querySelector('[aria-label="Resize agent and diff panels"]')).toBeNull();
+		});
 	});
 });

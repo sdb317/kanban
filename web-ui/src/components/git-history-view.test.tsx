@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UseGitHistoryDataResult } from "@/components/git-history/use-git-history-data";
 import { GitHistoryView } from "@/components/git-history-view";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 
 const mockGitRefsPanel = vi.fn((_props: { panelWidth: number }) => <div data-testid="git-refs-panel" />);
@@ -103,7 +104,11 @@ describe("GitHistoryView", () => {
 		window.localStorage.setItem(LocalStorageKey.GitHistoryCommitsPanelWidth, "500");
 
 		await act(async () => {
-			root.render(<GitHistoryView workspaceId="workspace-1" gitHistory={createGitHistory()} />);
+			root.render(
+				<WorktreeModeProvider value={true}>
+					<GitHistoryView workspaceId="workspace-1" gitHistory={createGitHistory()} />
+				</WorktreeModeProvider>,
+			);
 		});
 
 		expect(mockGitRefsPanel).toHaveBeenCalled();

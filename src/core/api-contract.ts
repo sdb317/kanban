@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INVALID_WORKTREES_ENABLED_MESSAGE } from "../config/worktree-setting.js";
 import { resolveTaskTitle } from "./task-title.js";
 
 export const runtimeWorkspaceFileStatusSchema = z.enum([
@@ -548,7 +549,7 @@ export const runtimeWorktreeEnsureResponseSchema = z.union([
 		ok: z.literal(true),
 		path: z.string(),
 		baseRef: z.string(),
-		baseCommit: z.string(),
+		baseCommit: z.string().nullable(),
 		warning: z.string().optional(),
 		error: z.string().optional(),
 	}),
@@ -955,6 +956,9 @@ export const runtimeConfigResponseSchema = z.object({
 	openPrPromptTemplate: z.string(),
 	commitPromptTemplateDefault: z.string(),
 	openPrPromptTemplateDefault: z.string(),
+	globalWorktreesEnabled: z.boolean().nullable(),
+	projectWorktreesEnabled: z.boolean().nullable(),
+	worktreesEnabled: z.boolean(),
 });
 export type RuntimeConfigResponse = z.infer<typeof runtimeConfigResponseSchema>;
 
@@ -966,6 +970,8 @@ export const runtimeConfigSaveRequestSchema = z.object({
 	readyForReviewNotificationsEnabled: z.boolean().optional(),
 	commitPromptTemplate: z.string().optional(),
 	openPrPromptTemplate: z.string().optional(),
+	worktreesEnabled: z.boolean({ error: INVALID_WORKTREES_ENABLED_MESSAGE }).optional(),
+	projectWorktreesEnabled: z.boolean({ error: INVALID_WORKTREES_ENABLED_MESSAGE }).nullable().optional(),
 });
 export type RuntimeConfigSaveRequest = z.infer<typeof runtimeConfigSaveRequestSchema>;
 

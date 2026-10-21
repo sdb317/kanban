@@ -10,7 +10,10 @@ import type {
 	RuntimeTaskTurnCheckpoint,
 } from "../core/api-contract";
 import { isHomeAgentSessionId } from "../core/home-agent-session";
-import { resolveHomeAgentAppendSystemPrompt } from "../prompts/append-system-prompt";
+import {
+	clearTurnCheckpoints as clearTurnCheckpointsFromSummary,
+	type TurnCheckpointPolicy,
+} from "../workspace/turn-checkpoint-policy.js";
 import { captureTaskTurnCheckpoint, deleteTaskTurnCheckpointRef } from "../workspace/turn-checkpoints";
 import {
 	compactPersistedMessagesForContextOverflow,
@@ -74,6 +77,12 @@ export interface StartClineTaskSessionRequest {
 	baseUrl?: string | null;
 	reasoningEffort?: RuntimeClineReasoningEffort | null;
 	systemPrompt?: string | null;
+	/**
+	 * Resolved append-system-prompt text for this session. The runtime resolves this through the
+	 * shared resolver so home sessions get the same sidebar text as before; the service no longer
+	 * calls `resolveHomeAgentAppendSystemPrompt` itself (Req 11.5, 11.6, 11.8).
+	 */
+	appendSystemPrompt?: string | null;
 }
 
 export interface ClineTaskSessionService {
@@ -98,6 +107,8 @@ export interface ClineTaskSessionService {
 	listSlashCommands(workspacePath: string): Promise<ClineSdkSlashCommand[]>;
 	loadTaskSessionMessages(taskId: string): Promise<ClineTaskMessage[]>;
 	applyTurnCheckpoint(taskId: string, checkpoint: RuntimeTaskTurnCheckpoint): RuntimeTaskSessionSummary | null;
+	/** Emit a summary for the task with both turn-checkpoint fields cleared (In-Place Mode, Req 6.3). */
+	clearTurnCheckpoints(taskId: string): RuntimeTaskSessionSummary | null;
 	dispose(): Promise<void>;
 }
 
@@ -106,6 +117,13 @@ export interface CreateInMemoryClineTaskSessionServiceOptions {
 	createMessageRepository?: () => ClineMessageRepository;
 	createRuntimeSetup?: (workspacePath: string) => Promise<ClineRuntimeSetup>;
 	watcherRegistry?: ClineWatcherRegistry;
+	/**
+	 * Turn-checkpoint policy. When omitted, checkpoints are always captured, preserving Worktree
+	 * Mode behavior (Req 6.1, 6.2).
+	 */
+	turnCheckpointPolicy?: TurnCheckpointPolicy;
+	/** Project path used by the policy to resolve the effective worktree mode at capture time. */
+	projectPath?: string;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -166,10 +184,14 @@ export class InMemoryClineTaskSessionService implements ClineTaskSessionService 
 	private readonly messageRepository: ClineMessageRepository;
 	private readonly watcherRegistry: ClineWatcherRegistry;
 	private readonly runtimeSetupLeaseByWorkspacePath = new Map<string, Promise<ClineRuntimeSetupLease>>();
+	private readonly turnCheckpointPolicy: TurnCheckpointPolicy | null;
+	private readonly projectPath: string;
 
 	constructor(options: CreateInMemoryClineTaskSessionServiceOptions = {}) {
 		const createSessionRuntime = options.createSessionRuntime ?? createInMemoryClineSessionRuntime;
 		const createMessageRepository = options.createMessageRepository ?? createInMemoryClineMessageRepository;
+		this.turnCheckpointPolicy = options.turnCheckpointPolicy ?? null;
+		this.projectPath = options.projectPath ?? "";
 		this.watcherRegistry =
 			options.watcherRegistry ??
 			createClineWatcherRegistry({
@@ -410,7 +432,7 @@ export class InMemoryClineTaskSessionService implements ClineTaskSessionService 
 						providerId,
 						rules: runtimeSetup.loadRules(),
 					}));
-				const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(request.taskId);
+				const appendedSystemPrompt = request.appendSystemPrompt?.trim();
 				if (appendedSystemPrompt) {
 					systemPrompt = `${systemPrompt}\n\n${appendedSystemPrompt}`;
 				}
@@ -795,6 +817,20 @@ export class InMemoryClineTaskSessionService implements ClineTaskSessionService 
 		return summary;
 	}
 
+	clearTurnCheckpoints(taskId: string): RuntimeTaskSessionSummary | null {
+		const entry = this.messageRepository.getTaskEntry(taskId);
+		if (!entry) {
+			return null;
+		}
+		const cleared = clearTurnCheckpointsFromSummary(entry.summary);
+		const summary = updateSummary(entry, {
+			latestTurnCheckpoint: cleared.latestTurnCheckpoint,
+			previousTurnCheckpoint: cleared.previousTurnCheckpoint,
+		});
+		this.emitSummary(summary);
+		return summary;
+	}
+
 	async dispose(): Promise<void> {
 		await this.sessionRuntime.dispose();
 		this.pendingTurnCancelTaskIds.clear();
@@ -832,6 +868,24 @@ export class InMemoryClineTaskSessionService implements ClineTaskSessionService 
 	}
 
 	private captureReviewCheckpoint(taskId: string, summary: RuntimeTaskSessionSummary): void {
+		// Ask the policy right before capturing so the effective worktree setting is honored at turn
+		// time; in In-Place Mode no checkpoint is captured (Req 6.1, 6.2).
+		void this.shouldCaptureTurnCheckpoint().then((shouldCapture) => {
+			if (!shouldCapture) {
+				return;
+			}
+			this.captureReviewCheckpointNow(taskId, summary);
+		});
+	}
+
+	private shouldCaptureTurnCheckpoint(): Promise<boolean> {
+		if (!this.turnCheckpointPolicy) {
+			return Promise.resolve(true);
+		}
+		return this.turnCheckpointPolicy.shouldCaptureTurnCheckpoint(this.projectPath);
+	}
+
+	private captureReviewCheckpointNow(taskId: string, summary: RuntimeTaskSessionSummary): void {
 		const nextTurn = (summary.latestTurnCheckpoint?.turn ?? 0) + 1;
 		const staleRef = summary.previousTurnCheckpoint?.ref ?? null;
 		void captureTaskTurnCheckpoint({

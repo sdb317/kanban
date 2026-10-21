@@ -163,6 +163,67 @@ describe("useAppHotkeys", () => {
 		expect(onStartAllTasks).toHaveBeenCalledTimes(1);
 	});
 
+	it("disables the git history shortcut when isGitHistoryEnabled is false", async () => {
+		await act(async () => {
+			root.render(
+				<HookHarness
+					selectedCard={null}
+					isDetailTerminalOpen={false}
+					isHomeTerminalOpen={false}
+					isHomeGitHistoryOpen={false}
+					canUseCreateTaskShortcut
+					isGitHistoryEnabled={false}
+					handleToggleDetailTerminal={() => {}}
+					handleToggleHomeTerminal={() => {}}
+					handleToggleExpandDetailTerminal={() => {}}
+					handleToggleExpandHomeTerminal={() => {}}
+					handleOpenCreateTask={() => {}}
+					handleOpenSettings={() => {}}
+					handleToggleGitHistory={() => {}}
+					handleCloseGitHistory={() => {}}
+					onStartAllTasks={() => {}}
+				/>,
+			);
+		});
+
+		const gitHistoryCall = mockUseHotkeys.mock.calls.find(([shortcut]) => shortcut === "mod+g");
+		if (!gitHistoryCall) {
+			throw new Error("Expected git history shortcut to be registered.");
+		}
+		const options = gitHistoryCall[2] as { enabled?: boolean } | undefined;
+		expect(options?.enabled).toBe(false);
+	});
+
+	it("enables the git history shortcut by default", async () => {
+		await act(async () => {
+			root.render(
+				<HookHarness
+					selectedCard={null}
+					isDetailTerminalOpen={false}
+					isHomeTerminalOpen={false}
+					isHomeGitHistoryOpen={false}
+					canUseCreateTaskShortcut
+					handleToggleDetailTerminal={() => {}}
+					handleToggleHomeTerminal={() => {}}
+					handleToggleExpandDetailTerminal={() => {}}
+					handleToggleExpandHomeTerminal={() => {}}
+					handleOpenCreateTask={() => {}}
+					handleOpenSettings={() => {}}
+					handleToggleGitHistory={() => {}}
+					handleCloseGitHistory={() => {}}
+					onStartAllTasks={() => {}}
+				/>,
+			);
+		});
+
+		const gitHistoryCall = mockUseHotkeys.mock.calls.find(([shortcut]) => shortcut === "mod+g");
+		if (!gitHistoryCall) {
+			throw new Error("Expected git history shortcut to be registered.");
+		}
+		const options = gitHistoryCall[2] as { enabled?: boolean } | undefined;
+		expect(options?.enabled).toBe(true);
+	});
+
 	it("does not open create task on C when create-task shortcut is disabled", async () => {
 		const handleOpenCreateTask = vi.fn();
 

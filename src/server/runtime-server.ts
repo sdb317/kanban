@@ -5,39 +5,40 @@ import { join } from "node:path";
 
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import { handleClineMcpOauthCallback } from "../cline-sdk/cline-mcp-runtime-service";
+import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
 import {
-    type ClineTaskSessionService,
-    createInMemoryClineTaskSessionService,
+	type ClineTaskSessionService,
+	createInMemoryClineTaskSessionService,
 } from "../cline-sdk/cline-task-session-service";
 import { createClineWatcherRegistry } from "../cline-sdk/cline-watcher-registry";
-import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
+import { loadEffectiveWorktreesEnabled, loadGlobalWorktreesEnabled } from "../config/effective-worktree-mode";
 import type {
-    RuntimeCommandRunResponse,
-    RuntimeRunUpdateResponse,
-    RuntimeUpdateStatusResponse,
-    RuntimeWorkspaceStateResponse,
+	RuntimeCommandRunResponse,
+	RuntimeRunUpdateResponse,
+	RuntimeUpdateStatusResponse,
+	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import {
-    buildKanbanRuntimeUrl,
-    getKanbanRuntimeHost,
-    getKanbanRuntimeOrigin,
-    getKanbanRuntimePort,
-    getKanbanRuntimeTls,
-    isKanbanRemoteHost,
+	buildKanbanRuntimeUrl,
+	getKanbanRuntimeHost,
+	getKanbanRuntimeOrigin,
+	getKanbanRuntimePort,
+	getKanbanRuntimeTls,
+	isKanbanRemoteHost,
 } from "../core/runtime-endpoint";
 import {
-    checkRateLimit,
-    clearRateLimit,
-    extractBearerToken,
-    extractSessionTokenFromCookie,
-    isPasscodeEnabled,
-    issueSession,
-    recordFailedAttempt,
-    validateInternalToken,
-    validatePasscode,
-    validateSession,
+	checkRateLimit,
+	clearRateLimit,
+	extractBearerToken,
+	extractSessionTokenFromCookie,
+	isPasscodeEnabled,
+	issueSession,
+	recordFailedAttempt,
+	validateInternalToken,
+	validatePasscode,
+	validateSession,
 } from "../security/passcode-manager";
-import { loadWorkspaceContextById } from "../state/workspace-state";
+import { loadWorkspaceScopeById } from "../state/workspace-state";
 import type { TerminalSessionManager } from "../terminal/session-manager";
 import { createTerminalWebSocketBridge } from "../terminal/ws-server";
 import { type RuntimeTrpcContext, type RuntimeTrpcWorkspaceScope, runtimeAppRouter } from "../trpc/app-router";
@@ -45,6 +46,8 @@ import { createHooksApi } from "../trpc/hooks-api";
 import { createProjectsApi } from "../trpc/projects-api";
 import { createRuntimeApi } from "../trpc/runtime-api";
 import { createWorkspaceApi } from "../trpc/workspace-api";
+import { createTaskWorkspaceProvider } from "../workspace/task-workspace-provider";
+import { createTurnCheckpointPolicy } from "../workspace/turn-checkpoint-policy";
 import { getWebUiDir, normalizeRequestPath, readAsset } from "./assets";
 import { handleHttpRequest, handleSocketUpgrade } from "./middleware";
 import type { RuntimeStateHub } from "./runtime-state-hub";
@@ -104,6 +107,9 @@ function readWorkspaceIdFromRequest(request: IncomingMessage, requestUrl: URL): 
 export async function createRuntimeServer(deps: CreateRuntimeServerDependencies): Promise<RuntimeServer> {
 	const webUiDir = getWebUiDir();
 
+	// Stateless policy shared across requests: checkpoints are captured only in Worktree Mode.
+	const turnCheckpointPolicy = createTurnCheckpointPolicy();
+
 	try {
 		await readFile(join(webUiDir, "index.html"));
 	} catch {
@@ -124,8 +130,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				workspaceScope: null,
 			};
 		}
-		const requestedWorkspaceContext = await loadWorkspaceContextById(requestedWorkspaceId);
-		if (!requestedWorkspaceContext) {
+		const requestedWorkspaceScope = await loadWorkspaceScopeById(requestedWorkspaceId);
+		if (!requestedWorkspaceScope) {
 			return {
 				requestedWorkspaceId,
 				workspaceScope: null,
@@ -134,8 +140,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 		return {
 			requestedWorkspaceId,
 			workspaceScope: {
-				workspaceId: requestedWorkspaceContext.workspaceId,
-				workspacePath: requestedWorkspaceContext.repoPath,
+				workspaceId: requestedWorkspaceScope.workspaceId,
+				workspacePath: requestedWorkspaceScope.repoPath,
 			},
 		};
 	};
@@ -151,6 +157,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 		if (!service) {
 			service = createInMemoryClineTaskSessionService({
 				watcherRegistry: clineWatcherRegistry,
+				turnCheckpointPolicy,
+				projectPath: scope.workspacePath,
 			});
 			clineTaskSessionServiceByWorkspaceId.set(scope.workspaceId, service);
 			deps.runtimeStateHub.trackClineTaskSessionService(scope.workspaceId, scope.workspacePath, service);
@@ -202,6 +210,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				setActiveRuntimeConfig: deps.workspaceRegistry.setActiveRuntimeConfig,
 				getScopedTerminalManager,
 				getScopedClineTaskSessionService,
+				loadEffectiveWorktreesEnabled,
+				resolveTaskWorkspaceProvider: createTaskWorkspaceProvider,
 				resolveInteractiveShellCommand: deps.resolveInteractiveShellCommand,
 				runCommand: deps.runCommand,
 				broadcastClineMcpAuthStatusesUpdated: deps.runtimeStateHub.broadcastClineMcpAuthStatusesUpdated,
@@ -217,6 +227,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				broadcastRuntimeWorkspaceStateUpdated: deps.runtimeStateHub.broadcastRuntimeWorkspaceStateUpdated,
 				broadcastRuntimeProjectsUpdated: deps.runtimeStateHub.broadcastRuntimeProjectsUpdated,
 				buildWorkspaceStateSnapshot: deps.workspaceRegistry.buildWorkspaceStateSnapshot,
+				loadEffectiveWorktreesEnabled,
 			}),
 			projectsApi: createProjectsApi({
 				getActiveWorkspacePath: deps.workspaceRegistry.getActiveWorkspacePath,
@@ -236,6 +247,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 					return deps.disposeWorkspace(workspaceId, options);
 				},
 				collectProjectWorktreeTaskIdsForRemoval: deps.collectProjectWorktreeTaskIdsForRemoval,
+				loadGlobalWorktreesEnabled,
+				loadEffectiveWorktreesEnabled,
 				warn: deps.warn,
 				buildProjectsPayload: deps.workspaceRegistry.buildProjectsPayload,
 				pickDirectoryPathFromSystemDialog: deps.pickDirectoryPathFromSystemDialog,
@@ -246,6 +259,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				ensureTerminalManagerForWorkspace: deps.ensureTerminalManagerForWorkspace,
 				broadcastRuntimeWorkspaceStateUpdated: deps.runtimeStateHub.broadcastRuntimeWorkspaceStateUpdated,
 				broadcastTaskReadyForReview: deps.runtimeStateHub.broadcastTaskReadyForReview,
+				turnCheckpointPolicy,
 			}),
 		};
 	};

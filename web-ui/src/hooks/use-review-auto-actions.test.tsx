@@ -62,6 +62,8 @@ function HookHarness({
 		taskGitActionLoadingByTaskId: {},
 		runAutoReviewGitAction,
 		requestMoveTaskToTrash,
+		enabled: true,
+		worktreesEnabled: true,
 	});
 	return null;
 }

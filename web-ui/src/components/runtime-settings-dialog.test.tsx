@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RuntimeSettingsDialog } from "@/components/runtime-settings-dialog";
 import type { RuntimeConfigResponse } from "@/runtime/types";
+import { WorktreeModeProvider } from "@/runtime/worktree-mode";
 
 /*
  * Radix Select depends on pointer-capture APIs that jsdom lacks.
@@ -142,7 +143,7 @@ vi.mock("@/runtime/use-runtime-config", () => ({
 		isLoading: false,
 		isSaving: false,
 		refresh: vi.fn(),
-		save: vi.fn(async () => true),
+		save: vi.fn(async () => ({ ok: true, config: initialConfig ?? null })),
 	}),
 }));
 
@@ -247,12 +248,14 @@ describe("RuntimeSettingsDialog", () => {
 	it("does not render support actions inside settings", async () => {
 		await act(async () => {
 			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedClineOauthConfig}
-					onOpenChange={() => {}}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<RuntimeSettingsDialog
+						open={true}
+						workspaceId={"workspace-1"}
+						initialConfig={savedClineOauthConfig}
+						onOpenChange={() => {}}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -263,12 +266,14 @@ describe("RuntimeSettingsDialog", () => {
 	it("calls the layout reset callback when reset layout is clicked", async () => {
 		await act(async () => {
 			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedClineOauthConfig}
-					onOpenChange={() => {}}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<RuntimeSettingsDialog
+						open={true}
+						workspaceId={"workspace-1"}
+						initialConfig={savedClineOauthConfig}
+						onOpenChange={() => {}}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -286,12 +291,14 @@ describe("RuntimeSettingsDialog", () => {
 		const handleOpenChange = vi.fn();
 		await act(async () => {
 			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedClineOauthConfig}
-					onOpenChange={handleOpenChange}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<RuntimeSettingsDialog
+						open={true}
+						workspaceId={"workspace-1"}
+						initialConfig={savedClineOauthConfig}
+						onOpenChange={handleOpenChange}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -333,12 +340,14 @@ describe("RuntimeSettingsDialog", () => {
 		const handleOpenChange = vi.fn();
 		await act(async () => {
 			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedClineOauthConfig}
-					onOpenChange={handleOpenChange}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<RuntimeSettingsDialog
+						open={true}
+						workspaceId={"workspace-1"}
+						initialConfig={savedClineOauthConfig}
+						onOpenChange={handleOpenChange}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 
@@ -370,13 +379,15 @@ describe("RuntimeSettingsDialog", () => {
 		const handleSaved = vi.fn();
 		await act(async () => {
 			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedClineOauthConfig}
-					onOpenChange={() => {}}
-					onSaved={handleSaved}
-				/>,
+				<WorktreeModeProvider value={true}>
+					<RuntimeSettingsDialog
+						open={true}
+						workspaceId={"workspace-1"}
+						initialConfig={savedClineOauthConfig}
+						onOpenChange={() => {}}
+						onSaved={handleSaved}
+					/>
+				</WorktreeModeProvider>,
 			);
 		});
 

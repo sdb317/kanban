@@ -7,8 +7,14 @@ import { dirname, join, resolve } from "node:path";
 import { getRuntimeAgentCatalogEntry, isRuntimeAgentLaunchSupported } from "../core/agent-catalog";
 import type { RuntimeAgentId, RuntimeProjectShortcut } from "../core/api-contract";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
+import { detectGitRoot } from "../state/workspace-state";
 import { detectInstalledCommands } from "../terminal/agent-registry";
 import { areRuntimeProjectShortcutsEqual } from "./shortcut-utils";
+import {
+	parseWorktreeSettingValue,
+	resolveEffectiveWorktreesEnabled,
+	WORKTREES_REQUIRE_GIT_MESSAGE,
+} from "./worktree-setting";
 
 interface RuntimeGlobalConfigFileShape {
 	selectedAgentId?: RuntimeAgentId;
@@ -17,10 +23,14 @@ interface RuntimeGlobalConfigFileShape {
 	readyForReviewNotificationsEnabled?: boolean;
 	commitPromptTemplate?: string;
 	openPrPromptTemplate?: string;
+	// `unknown` because the file may hold an invalid (non-boolean) value.
+	worktreesEnabled?: unknown;
 }
 
 interface RuntimeProjectConfigFileShape {
 	shortcuts?: RuntimeProjectShortcut[];
+	// `unknown` because the file may hold an invalid (non-boolean) value.
+	worktreesEnabled?: unknown;
 }
 
 export interface RuntimeConfigState {
@@ -35,6 +45,9 @@ export interface RuntimeConfigState {
 	openPrPromptTemplate: string;
 	commitPromptTemplateDefault: string;
 	openPrPromptTemplateDefault: string;
+	globalWorktreesEnabled: boolean | null;
+	projectWorktreesEnabled: boolean | null;
+	worktreesEnabled: boolean;
 }
 
 export interface RuntimeConfigUpdateInput {
@@ -45,6 +58,10 @@ export interface RuntimeConfigUpdateInput {
 	shortcuts?: RuntimeProjectShortcut[];
 	commitPromptTemplate?: string;
 	openPrPromptTemplate?: string;
+	// Global worktree setting.
+	worktreesEnabled?: boolean;
+	// Project override; `null` clears the override.
+	projectWorktreesEnabled?: boolean | null;
 }
 
 const RUNTIME_HOME_PARENT_DIR = ".cline";
@@ -270,6 +287,8 @@ function toRuntimeConfigState({
 	globalConfig: RuntimeGlobalConfigFileShape | null;
 	projectConfig: RuntimeProjectConfigFileShape | null;
 }): RuntimeConfigState {
+	const globalWorktreesEnabled = parseWorktreeSettingValue(globalConfig?.worktreesEnabled);
+	const projectWorktreesEnabled = parseWorktreeSettingValue(projectConfig?.worktreesEnabled);
 	return {
 		globalConfigPath,
 		projectConfigPath,
@@ -291,6 +310,9 @@ function toRuntimeConfigState({
 		),
 		commitPromptTemplateDefault: DEFAULT_COMMIT_PROMPT_TEMPLATE,
 		openPrPromptTemplateDefault: DEFAULT_OPEN_PR_PROMPT_TEMPLATE,
+		globalWorktreesEnabled,
+		projectWorktreesEnabled,
+		worktreesEnabled: resolveEffectiveWorktreesEnabled({ globalWorktreesEnabled, projectWorktreesEnabled }),
 	};
 }
 
@@ -312,6 +334,7 @@ async function writeRuntimeGlobalConfigFile(
 		readyForReviewNotificationsEnabled?: boolean;
 		commitPromptTemplate?: string;
 		openPrPromptTemplate?: string;
+		worktreesEnabled?: boolean;
 	},
 ): Promise<void> {
 	const existing = await readRuntimeConfigFile<RuntimeGlobalConfigFileShape>(configPath);
@@ -374,24 +397,66 @@ async function writeRuntimeGlobalConfigFile(
 	if (hasOwnKey(existing, "openPrPromptTemplate") || openPrPromptTemplate !== DEFAULT_OPEN_PR_PROMPT_TEMPLATE) {
 		payload.openPrPromptTemplate = openPrPromptTemplate;
 	}
+	const hadWorktreesEnabledKey = hasOwnKey(existing, "worktreesEnabled");
+	if (config.worktreesEnabled !== undefined) {
+		// Omit the key when writing `false` and it was absent from the file before (Req 1.9).
+		if (config.worktreesEnabled !== false || hadWorktreesEnabledKey) {
+			payload.worktreesEnabled = config.worktreesEnabled;
+		}
+	} else if (hadWorktreesEnabledKey) {
+		// No update provided: preserve any existing raw value unchanged (valid or not) (Req 1.7).
+		payload.worktreesEnabled = existing?.worktreesEnabled;
+	}
 
 	await lockedFileSystem.writeJsonFileAtomic(configPath, payload, {
 		lock: null,
 	});
 }
 
+// Sentinel used to distinguish "no worktree value in the payload" from an
+// explicit value (including a preserved `undefined`/invalid raw value).
+const WORKTREES_ENABLED_ABSENT = Symbol("worktreesEnabledAbsent");
+
 async function writeRuntimeProjectConfigFile(
 	configPath: string | null,
-	config: { shortcuts: RuntimeProjectShortcut[] },
+	config: {
+		shortcuts: RuntimeProjectShortcut[];
+		// Override to write: `boolean` sets it, `null` clears it, `undefined`
+		// leaves the stored value untouched (see `existingWorktreesEnabled`).
+		worktreesEnabled?: boolean | null;
+		// Raw stored value to preserve verbatim when `worktreesEnabled` is
+		// `undefined` (Req 1.7: leave invalid/untouched values unchanged).
+		existingWorktreesEnabled?: unknown;
+	},
 ): Promise<void> {
 	const normalizedShortcuts = normalizeShortcuts(config.shortcuts);
+
+	// Resolve the worktree value that should appear in the written payload.
+	let worktreePayloadValue: unknown = WORKTREES_ENABLED_ABSENT;
+	if (config.worktreesEnabled === undefined) {
+		// Untouched: preserve any existing raw value (valid or not).
+		if (config.existingWorktreesEnabled !== undefined) {
+			worktreePayloadValue = config.existingWorktreesEnabled;
+		}
+	} else if (config.worktreesEnabled !== null) {
+		// Explicit boolean override.
+		worktreePayloadValue = config.worktreesEnabled;
+	}
+	// `config.worktreesEnabled === null` clears the override: leave absent.
+
+	const hasWorktreeValue = worktreePayloadValue !== WORKTREES_ENABLED_ABSENT;
+	const hasShortcuts = normalizedShortcuts.length > 0;
+
 	if (!configPath) {
-		if (normalizedShortcuts.length > 0) {
+		if (hasShortcuts) {
 			throw new Error("Cannot save project shortcuts without a selected project.");
 		}
 		return;
 	}
-	if (normalizedShortcuts.length === 0) {
+
+	// Delete the project config file only when BOTH shortcuts and the worktree
+	// override are absent (preserves today's cleanup for shortcut-only projects).
+	if (!hasShortcuts && !hasWorktreeValue) {
 		await rm(configPath, { force: true });
 		try {
 			await rm(dirname(configPath));
@@ -400,15 +465,20 @@ async function writeRuntimeProjectConfigFile(
 		}
 		return;
 	}
-	await lockedFileSystem.writeJsonFileAtomic(
-		configPath,
-		{
-			shortcuts: normalizedShortcuts,
-		} satisfies RuntimeProjectConfigFileShape,
-		{
-			lock: null,
-		},
-	);
+
+	const payload: RuntimeProjectConfigFileShape = {};
+	if (hasShortcuts) {
+		payload.shortcuts = normalizedShortcuts;
+	}
+	if (hasWorktreeValue) {
+		payload.worktreesEnabled = worktreePayloadValue;
+	}
+
+	// `writeJsonFileAtomic` creates `<project>/.cline/kanban` (the payload's
+	// parent directory) recursively, so no other folders are created.
+	await lockedFileSystem.writeJsonFileAtomic(configPath, payload, {
+		lock: null,
+	});
 }
 
 interface RuntimeConfigFiles {
@@ -456,6 +526,8 @@ function createRuntimeConfigStateFromValues(input: {
 	shortcuts: RuntimeProjectShortcut[];
 	commitPromptTemplate: string;
 	openPrPromptTemplate: string;
+	globalWorktreesEnabled: boolean | null;
+	projectWorktreesEnabled: boolean | null;
 }): RuntimeConfigState {
 	return {
 		globalConfigPath: input.globalConfigPath,
@@ -475,10 +547,18 @@ function createRuntimeConfigStateFromValues(input: {
 		openPrPromptTemplate: normalizePromptTemplate(input.openPrPromptTemplate, DEFAULT_OPEN_PR_PROMPT_TEMPLATE),
 		commitPromptTemplateDefault: DEFAULT_COMMIT_PROMPT_TEMPLATE,
 		openPrPromptTemplateDefault: DEFAULT_OPEN_PR_PROMPT_TEMPLATE,
+		globalWorktreesEnabled: input.globalWorktreesEnabled,
+		projectWorktreesEnabled: input.projectWorktreesEnabled,
+		worktreesEnabled: resolveEffectiveWorktreesEnabled({
+			globalWorktreesEnabled: input.globalWorktreesEnabled,
+			projectWorktreesEnabled: input.projectWorktreesEnabled,
+		}),
 	};
 }
 
 export function toGlobalRuntimeConfigState(current: RuntimeConfigState): RuntimeConfigState {
+	// The global state ignores any project override: `projectWorktreesEnabled`
+	// is null, so the effective value resolves from the global source only.
 	return createRuntimeConfigStateFromValues({
 		globalConfigPath: current.globalConfigPath,
 		projectConfigPath: null,
@@ -489,6 +569,8 @@ export function toGlobalRuntimeConfigState(current: RuntimeConfigState): Runtime
 		shortcuts: [],
 		commitPromptTemplate: current.commitPromptTemplate,
 		openPrPromptTemplate: current.openPrPromptTemplate,
+		globalWorktreesEnabled: current.globalWorktreesEnabled,
+		projectWorktreesEnabled: null,
 	});
 }
 
@@ -528,6 +610,11 @@ export async function saveRuntimeConfig(
 ): Promise<RuntimeConfigState> {
 	const { globalConfigPath, projectConfigPath } = resolveRuntimeConfigPaths(cwd);
 	return await lockedFileSystem.withLocks(getRuntimeConfigLockRequests(cwd), async () => {
+		// This full-save path does not change worktree settings: read the stored
+		// values so they are preserved on write and reflected in the result.
+		const existingFiles = await readRuntimeConfigFiles(cwd);
+		const globalWorktreesEnabled = parseWorktreeSettingValue(existingFiles.globalConfig?.worktreesEnabled);
+		const projectWorktreesEnabled = parseWorktreeSettingValue(existingFiles.projectConfig?.worktreesEnabled);
 		await writeRuntimeGlobalConfigFile(globalConfigPath, {
 			selectedAgentId: config.selectedAgentId,
 			selectedShortcutLabel: config.selectedShortcutLabel,
@@ -536,7 +623,10 @@ export async function saveRuntimeConfig(
 			commitPromptTemplate: config.commitPromptTemplate,
 			openPrPromptTemplate: config.openPrPromptTemplate,
 		});
-		await writeRuntimeProjectConfigFile(projectConfigPath, { shortcuts: config.shortcuts });
+		await writeRuntimeProjectConfigFile(projectConfigPath, {
+			shortcuts: config.shortcuts,
+			existingWorktreesEnabled: existingFiles.projectConfig?.worktreesEnabled,
+		});
 		return createRuntimeConfigStateFromValues({
 			globalConfigPath,
 			projectConfigPath,
@@ -547,17 +637,48 @@ export async function saveRuntimeConfig(
 			shortcuts: config.shortcuts,
 			commitPromptTemplate: config.commitPromptTemplate,
 			openPrPromptTemplate: config.openPrPromptTemplate,
+			globalWorktreesEnabled,
+			projectWorktreesEnabled,
 		});
 	});
 }
 
 export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpdateInput): Promise<RuntimeConfigState> {
 	const { globalConfigPath, projectConfigPath } = resolveRuntimeConfigPaths(cwd);
+	// Reject a project override update when there is no project config path
+	// (e.g. project path == home dir). Done before acquiring locks / writing.
+	if (projectConfigPath === null && updates.projectWorktreesEnabled !== undefined) {
+		throw new Error("Cannot save a project worktree override without a selected project.");
+	}
 	return await lockedFileSystem.withLocks(getRuntimeConfigLockRequests(cwd), async () => {
+		// Keeps the missing-global auto-select side effect from the original flow.
 		const current = await loadRuntimeConfigLocked(cwd);
+		// Re-read the raw project value so invalid/untouched values are preserved.
+		const existingProjectConfig = projectConfigPath
+			? await readRuntimeConfigFile<RuntimeProjectConfigFileShape>(projectConfigPath)
+			: null;
 		if (projectConfigPath === null && normalizeShortcuts(updates.shortcuts).length > 0) {
 			throw new Error("Cannot save project shortcuts without a selected project.");
 		}
+
+		// Layer the incoming worktree updates over the current stored sources.
+		const nextGlobalWorktreesEnabled =
+			updates.worktreesEnabled === undefined ? current.globalWorktreesEnabled : updates.worktreesEnabled;
+		const nextProjectWorktreesEnabled =
+			updates.projectWorktreesEnabled === undefined
+				? current.projectWorktreesEnabled
+				: updates.projectWorktreesEnabled;
+		const nextEffectiveWorktreesEnabled = resolveEffectiveWorktreesEnabled({
+			globalWorktreesEnabled: nextGlobalWorktreesEnabled,
+			projectWorktreesEnabled: nextProjectWorktreesEnabled,
+		});
+
+		// Reject enabling worktrees for a non-git project (Req 2.7). Only guard
+		// when the effective value would actually become `true`.
+		if (nextEffectiveWorktreesEnabled && detectGitRoot(resolve(cwd)) === null) {
+			throw new Error(WORKTREES_REQUIRE_GIT_MESSAGE);
+		}
+
 		const nextConfig = {
 			selectedAgentId: updates.selectedAgentId ?? current.selectedAgentId,
 			selectedShortcutLabel:
@@ -577,6 +698,8 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			nextConfig.readyForReviewNotificationsEnabled !== current.readyForReviewNotificationsEnabled ||
 			nextConfig.commitPromptTemplate !== current.commitPromptTemplate ||
 			nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate ||
+			nextGlobalWorktreesEnabled !== current.globalWorktreesEnabled ||
+			nextProjectWorktreesEnabled !== current.projectWorktreesEnabled ||
 			!areRuntimeProjectShortcutsEqual(nextConfig.shortcuts, current.shortcuts);
 
 		if (!hasChanges) {
@@ -590,9 +713,12 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 			commitPromptTemplate: nextConfig.commitPromptTemplate,
 			openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+			worktreesEnabled: updates.worktreesEnabled,
 		});
 		await writeRuntimeProjectConfigFile(projectConfigPath, {
 			shortcuts: nextConfig.shortcuts,
+			worktreesEnabled: updates.projectWorktreesEnabled,
+			existingWorktreesEnabled: existingProjectConfig?.worktreesEnabled,
 		});
 		return createRuntimeConfigStateFromValues({
 			globalConfigPath,
@@ -604,6 +730,8 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			shortcuts: nextConfig.shortcuts,
 			commitPromptTemplate: nextConfig.commitPromptTemplate,
 			openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+			globalWorktreesEnabled: nextGlobalWorktreesEnabled,
+			projectWorktreesEnabled: nextProjectWorktreesEnabled,
 		});
 	});
 }
@@ -621,6 +749,10 @@ export async function updateGlobalRuntimeConfig(
 			},
 		],
 		async () => {
+			// Global updates accept the global worktree setting only, never a
+			// project override.
+			const nextGlobalWorktreesEnabled =
+				updates.worktreesEnabled === undefined ? current.globalWorktreesEnabled : updates.worktreesEnabled;
 			const nextConfig = {
 				selectedAgentId: updates.selectedAgentId ?? current.selectedAgentId,
 				selectedShortcutLabel:
@@ -641,7 +773,8 @@ export async function updateGlobalRuntimeConfig(
 				nextConfig.agentAutonomousModeEnabled !== current.agentAutonomousModeEnabled ||
 				nextConfig.readyForReviewNotificationsEnabled !== current.readyForReviewNotificationsEnabled ||
 				nextConfig.commitPromptTemplate !== current.commitPromptTemplate ||
-				nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate;
+				nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate ||
+				nextGlobalWorktreesEnabled !== current.globalWorktreesEnabled;
 
 			if (!hasChanges) {
 				return current;
@@ -654,6 +787,7 @@ export async function updateGlobalRuntimeConfig(
 				readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 				commitPromptTemplate: nextConfig.commitPromptTemplate,
 				openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+				worktreesEnabled: updates.worktreesEnabled,
 			});
 
 			return createRuntimeConfigStateFromValues({
@@ -666,6 +800,8 @@ export async function updateGlobalRuntimeConfig(
 				shortcuts: nextConfig.shortcuts,
 				commitPromptTemplate: nextConfig.commitPromptTemplate,
 				openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+				globalWorktreesEnabled: nextGlobalWorktreesEnabled,
+				projectWorktreesEnabled: current.projectWorktreesEnabled,
 			});
 		},
 	);

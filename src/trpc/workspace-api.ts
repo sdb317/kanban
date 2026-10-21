@@ -26,14 +26,25 @@ import {
 } from "../workspace/get-workspace-changes";
 import { getCommitDiff, getGitLog, getGitRefs } from "../workspace/git-history";
 import { discardGitChanges, getGitSyncSummary, runGitCheckoutAction, runGitSyncAction } from "../workspace/git-sync";
+import {
+	createInPlaceCommitDiffResponse,
+	createInPlaceGitCheckoutResponse,
+	createInPlaceGitDiscardResponse,
+	createInPlaceGitLogResponse,
+	createInPlaceGitRefsResponse,
+	createInPlaceGitSummaryResponse,
+	createInPlaceGitSyncResponse,
+	createInPlaceWorkspaceChangesResponse,
+} from "../workspace/in-place-responses";
 import { searchWorkspaceFiles } from "../workspace/search-workspace-files";
+import { createTaskWorkspaceProvider } from "../workspace/task-workspace-provider";
 import {
 	deleteTaskWorktree,
 	ensureTaskWorktreeIfDoesntExist,
 	getTaskWorkspaceInfo,
 	resolveTaskCwd,
 } from "../workspace/task-worktree";
-import type { RuntimeTrpcContext } from "./app-router";
+import type { RuntimeTrpcContext, RuntimeTrpcWorkspaceScope } from "./app-router";
 
 export interface CreateWorkspaceApiDependencies {
 	ensureTerminalManagerForWorkspace: (workspaceId: string, repoPath: string) => Promise<TerminalSessionManager>;
@@ -44,6 +55,7 @@ export interface CreateWorkspaceApiDependencies {
 	broadcastRuntimeWorkspaceStateUpdated: (workspaceId: string, workspacePath: string) => Promise<void> | void;
 	broadcastRuntimeProjectsUpdated: (preferredCurrentProjectId: string | null) => Promise<void> | void;
 	buildWorkspaceStateSnapshot: (workspaceId: string, workspacePath: string) => Promise<RuntimeWorkspaceStateResponse>;
+	loadEffectiveWorktreesEnabled: (workspacePath: string) => Promise<boolean>;
 }
 
 function normalizeOptionalTaskWorkspaceScopeInput(
@@ -197,150 +209,225 @@ function isMissingTaskWorktreeError(error: unknown): boolean {
 }
 
 export function createWorkspaceApi(deps: CreateWorkspaceApiDependencies): RuntimeTrpcContext["workspaceApi"] {
+	/**
+	 * Resolves the effective worktree setting for the scope on every call (never
+	 * cached) and runs the matching branch. In-Place Mode runs the pure `inPlace`
+	 * builder; Worktree Mode keeps today's `worktree` body (Req 5.9, 5.11).
+	 */
+	const byMode = async <T>(
+		scope: RuntimeTrpcWorkspaceScope,
+		inPlace: () => T | Promise<T>,
+		worktree: () => Promise<T>,
+	): Promise<T> =>
+		(await deps.loadEffectiveWorktreesEnabled(scope.workspacePath)) ? await worktree() : await inPlace();
+
 	return {
-		loadGitSummary: async (workspaceScope, input) => {
-			try {
-				const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input);
-				let summaryCwd = workspaceScope.workspacePath;
-				if (taskScope) {
-					summaryCwd = await resolveTaskCwd({
+		loadGitSummary: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitSummaryResponse(),
+				async () => {
+					try {
+						const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input);
+						let summaryCwd = workspaceScope.workspacePath;
+						if (taskScope) {
+							summaryCwd = await resolveTaskCwd({
+								cwd: workspaceScope.workspacePath,
+								taskId: taskScope.taskId,
+								baseRef: taskScope.baseRef,
+								ensure: false,
+							});
+						}
+						const summary = await getGitSyncSummary(summaryCwd);
+						return {
+							ok: true,
+							summary,
+						} satisfies RuntimeGitSummaryResponse;
+					} catch (error) {
+						return createEmptyGitSummaryErrorResponse(error);
+					}
+				},
+			),
+		runGitSyncAction: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitSyncResponse(input.action),
+				async () => {
+					try {
+						return await runGitSyncAction({
+							cwd: workspaceScope.workspacePath,
+							action: input.action,
+						});
+					} catch (error) {
+						return createEmptyGitSyncErrorResponse(input.action, error);
+					}
+				},
+			),
+		checkoutGitBranch: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitCheckoutResponse(parseGitCheckoutRequest(input).branch),
+				async () => {
+					try {
+						const body = parseGitCheckoutRequest(input);
+						const response = await runGitCheckoutAction({
+							cwd: workspaceScope.workspacePath,
+							branch: body.branch,
+						});
+						if (response.ok) {
+							void deps.broadcastRuntimeWorkspaceStateUpdated(
+								workspaceScope.workspaceId,
+								workspaceScope.workspacePath,
+							);
+						}
+						return response;
+					} catch (error) {
+						return createEmptyGitCheckoutErrorResponse(error);
+					}
+				},
+			),
+		discardGitChanges: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitDiscardResponse(),
+				async () => {
+					try {
+						const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input);
+						let discardCwd = workspaceScope.workspacePath;
+						if (taskScope) {
+							discardCwd = await resolveTaskCwd({
+								cwd: workspaceScope.workspacePath,
+								taskId: taskScope.taskId,
+								baseRef: taskScope.baseRef,
+								ensure: false,
+							});
+						}
+						const response = await discardGitChanges({
+							cwd: discardCwd,
+						});
+						if (response.ok) {
+							void deps.broadcastRuntimeWorkspaceStateUpdated(
+								workspaceScope.workspaceId,
+								workspaceScope.workspacePath,
+							);
+						}
+						return response;
+					} catch (error) {
+						return createEmptyGitDiscardErrorResponse(error);
+					}
+				},
+			),
+		loadChanges: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceWorkspaceChangesResponse(workspaceScope.workspacePath, () => Date.now()),
+				async () => {
+					const normalizedInput = normalizeRequiredTaskWorkspaceScopeInput(input);
+					let taskCwd: string;
+					try {
+						taskCwd = await resolveTaskCwd({
+							cwd: workspaceScope.workspacePath,
+							taskId: normalizedInput.taskId,
+							baseRef: normalizedInput.baseRef,
+							ensure: false,
+						});
+					} catch (error) {
+						if (!isMissingTaskWorktreeError(error)) {
+							throw error;
+						}
+						return await createEmptyWorkspaceChangesResponse(workspaceScope.workspacePath);
+					}
+					if (normalizedInput.mode === "last_turn") {
+						const terminalManager = await deps.ensureTerminalManagerForWorkspace(
+							workspaceScope.workspaceId,
+							workspaceScope.workspacePath,
+						);
+						const clineTaskSessionService = await deps.getScopedClineTaskSessionService(workspaceScope);
+						const summary = selectLastTurnSummary(
+							terminalManager.getSummary(normalizedInput.taskId),
+							clineTaskSessionService.getSummary(normalizedInput.taskId),
+						);
+						const fromCheckpoint = summary?.previousTurnCheckpoint;
+						const toCheckpoint = summary?.latestTurnCheckpoint;
+						if (!toCheckpoint) {
+							return await createEmptyWorkspaceChangesResponse(taskCwd);
+						}
+						if (summary?.state === "running" || !fromCheckpoint) {
+							return await getWorkspaceChangesFromRef({
+								cwd: taskCwd,
+								fromRef: toCheckpoint.commit,
+							});
+						}
+						return await getWorkspaceChangesBetweenRefs({
+							cwd: taskCwd,
+							fromRef: fromCheckpoint.commit,
+							toRef: toCheckpoint.commit,
+						});
+					}
+					return await getWorkspaceChanges(taskCwd);
+				},
+			),
+		ensureWorktree: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => {
+					const body = parseWorktreeEnsureRequest(input, { allowEmptyBaseRef: true });
+					const provider = createTaskWorkspaceProvider(workspaceScope.workspacePath, false);
+					return provider.ensureTaskWorkspace({
+						taskId: body.taskId,
+						baseRef: body.baseRef,
+					});
+				},
+				async () => {
+					const body = parseWorktreeEnsureRequest(input);
+					return await ensureTaskWorktreeIfDoesntExist({
 						cwd: workspaceScope.workspacePath,
-						taskId: taskScope.taskId,
-						baseRef: taskScope.baseRef,
-						ensure: false,
+						taskId: body.taskId,
+						baseRef: body.baseRef,
 					});
-				}
-				const summary = await getGitSyncSummary(summaryCwd);
-				return {
-					ok: true,
-					summary,
-				} satisfies RuntimeGitSummaryResponse;
-			} catch (error) {
-				return createEmptyGitSummaryErrorResponse(error);
-			}
-		},
-		runGitSyncAction: async (workspaceScope, input) => {
-			try {
-				return await runGitSyncAction({
-					cwd: workspaceScope.workspacePath,
-					action: input.action,
-				});
-			} catch (error) {
-				return createEmptyGitSyncErrorResponse(input.action, error);
-			}
-		},
-		checkoutGitBranch: async (workspaceScope, input) => {
-			try {
-				const body = parseGitCheckoutRequest(input);
-				const response = await runGitCheckoutAction({
-					cwd: workspaceScope.workspacePath,
-					branch: body.branch,
-				});
-				if (response.ok) {
-					void deps.broadcastRuntimeWorkspaceStateUpdated(
-						workspaceScope.workspaceId,
-						workspaceScope.workspacePath,
-					);
-				}
-				return response;
-			} catch (error) {
-				return createEmptyGitCheckoutErrorResponse(error);
-			}
-		},
-		discardGitChanges: async (workspaceScope, input) => {
-			try {
-				const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input);
-				let discardCwd = workspaceScope.workspacePath;
-				if (taskScope) {
-					discardCwd = await resolveTaskCwd({
+				},
+			),
+		deleteWorktree: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => {
+					const body = parseWorktreeDeleteRequest(input);
+					const provider = createTaskWorkspaceProvider(workspaceScope.workspacePath, false);
+					return provider.deleteTaskWorkspace({
+						taskId: body.taskId,
+					});
+				},
+				async () => {
+					const body = parseWorktreeDeleteRequest(input);
+					return await deleteTaskWorktree({
+						repoPath: workspaceScope.workspacePath,
+						taskId: body.taskId,
+					});
+				},
+			),
+		loadTaskContext: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => {
+					const taskId = input.taskId.trim();
+					if (!taskId) {
+						throw new Error("Missing taskId query parameter.");
+					}
+					const provider = createTaskWorkspaceProvider(workspaceScope.workspacePath, false);
+					return provider.getTaskWorkspaceInfo({
+						taskId,
+						baseRef: input.baseRef.trim(),
+					});
+				},
+				async () => {
+					const normalizedInput = normalizeRequiredTaskWorkspaceScopeInput(input);
+					return await getTaskWorkspaceInfo({
 						cwd: workspaceScope.workspacePath,
-						taskId: taskScope.taskId,
-						baseRef: taskScope.baseRef,
-						ensure: false,
+						taskId: normalizedInput.taskId,
+						baseRef: normalizedInput.baseRef,
 					});
-				}
-				const response = await discardGitChanges({
-					cwd: discardCwd,
-				});
-				if (response.ok) {
-					void deps.broadcastRuntimeWorkspaceStateUpdated(
-						workspaceScope.workspaceId,
-						workspaceScope.workspacePath,
-					);
-				}
-				return response;
-			} catch (error) {
-				return createEmptyGitDiscardErrorResponse(error);
-			}
-		},
-		loadChanges: async (workspaceScope, input) => {
-			const normalizedInput = normalizeRequiredTaskWorkspaceScopeInput(input);
-			let taskCwd: string;
-			try {
-				taskCwd = await resolveTaskCwd({
-					cwd: workspaceScope.workspacePath,
-					taskId: normalizedInput.taskId,
-					baseRef: normalizedInput.baseRef,
-					ensure: false,
-				});
-			} catch (error) {
-				if (!isMissingTaskWorktreeError(error)) {
-					throw error;
-				}
-				return await createEmptyWorkspaceChangesResponse(workspaceScope.workspacePath);
-			}
-			if (normalizedInput.mode === "last_turn") {
-				const terminalManager = await deps.ensureTerminalManagerForWorkspace(
-					workspaceScope.workspaceId,
-					workspaceScope.workspacePath,
-				);
-				const clineTaskSessionService = await deps.getScopedClineTaskSessionService(workspaceScope);
-				const summary = selectLastTurnSummary(
-					terminalManager.getSummary(normalizedInput.taskId),
-					clineTaskSessionService.getSummary(normalizedInput.taskId),
-				);
-				const fromCheckpoint = summary?.previousTurnCheckpoint;
-				const toCheckpoint = summary?.latestTurnCheckpoint;
-				if (!toCheckpoint) {
-					return await createEmptyWorkspaceChangesResponse(taskCwd);
-				}
-				if (summary?.state === "running" || !fromCheckpoint) {
-					return await getWorkspaceChangesFromRef({
-						cwd: taskCwd,
-						fromRef: toCheckpoint.commit,
-					});
-				}
-				return await getWorkspaceChangesBetweenRefs({
-					cwd: taskCwd,
-					fromRef: fromCheckpoint.commit,
-					toRef: toCheckpoint.commit,
-				});
-			}
-			return await getWorkspaceChanges(taskCwd);
-		},
-		ensureWorktree: async (workspaceScope, input) => {
-			const body = parseWorktreeEnsureRequest(input);
-			return await ensureTaskWorktreeIfDoesntExist({
-				cwd: workspaceScope.workspacePath,
-				taskId: body.taskId,
-				baseRef: body.baseRef,
-			});
-		},
-		deleteWorktree: async (workspaceScope, input) => {
-			const body = parseWorktreeDeleteRequest(input);
-			return await deleteTaskWorktree({
-				repoPath: workspaceScope.workspacePath,
-				taskId: body.taskId,
-			});
-		},
-		loadTaskContext: async (workspaceScope, input) => {
-			const normalizedInput = normalizeRequiredTaskWorkspaceScopeInput(input);
-			return await getTaskWorkspaceInfo({
-				cwd: workspaceScope.workspacePath,
-				taskId: normalizedInput.taskId,
-				baseRef: normalizedInput.baseRef,
-			});
-		},
+				},
+			),
 		searchFiles: async (workspaceScope, input) => {
 			const query = input.query.trim();
 			const limit = input.limit;
@@ -386,56 +473,74 @@ export function createWorkspaceApi(deps: CreateWorkspaceApiDependencies): Runtim
 				throw error;
 			}
 		},
-		loadWorkspaceChanges: async (workspaceScope) => {
-			return await getWorkspaceChanges(workspaceScope.workspacePath);
-		},
-		loadGitLog: async (workspaceScope, input) => {
-			const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input.taskScope ?? null);
-			let logCwd = workspaceScope.workspacePath;
-			if (taskScope) {
-				logCwd = await resolveTaskCwd({
-					cwd: workspaceScope.workspacePath,
-					taskId: taskScope.taskId,
-					baseRef: taskScope.baseRef,
-					ensure: false,
-				});
-			}
-			return await getGitLog({
-				cwd: logCwd,
-				ref: input.ref ?? null,
-				refs: input.refs ?? null,
-				maxCount: input.maxCount,
-				skip: input.skip,
-			});
-		},
-		loadGitRefs: async (workspaceScope, input) => {
-			const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input ?? null);
-			let refsCwd = workspaceScope.workspacePath;
-			if (taskScope) {
-				refsCwd = await resolveTaskCwd({
-					cwd: workspaceScope.workspacePath,
-					taskId: taskScope.taskId,
-					baseRef: taskScope.baseRef,
-					ensure: false,
-				});
-			}
-			return await getGitRefs(refsCwd);
-		},
-		loadCommitDiff: async (workspaceScope, input) => {
-			const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input.taskScope ?? null);
-			let diffCwd = workspaceScope.workspacePath;
-			if (taskScope) {
-				diffCwd = await resolveTaskCwd({
-					cwd: workspaceScope.workspacePath,
-					taskId: taskScope.taskId,
-					baseRef: taskScope.baseRef,
-					ensure: false,
-				});
-			}
-			return await getCommitDiff({
-				cwd: diffCwd,
-				commitHash: input.commitHash,
-			});
-		},
+		loadWorkspaceChanges: async (workspaceScope) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceWorkspaceChangesResponse(workspaceScope.workspacePath, () => Date.now()),
+				async () => await getWorkspaceChanges(workspaceScope.workspacePath),
+			),
+		loadGitLog: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitLogResponse(),
+				async () => {
+					const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input.taskScope ?? null);
+					let logCwd = workspaceScope.workspacePath;
+					if (taskScope) {
+						logCwd = await resolveTaskCwd({
+							cwd: workspaceScope.workspacePath,
+							taskId: taskScope.taskId,
+							baseRef: taskScope.baseRef,
+							ensure: false,
+						});
+					}
+					return await getGitLog({
+						cwd: logCwd,
+						ref: input.ref ?? null,
+						refs: input.refs ?? null,
+						maxCount: input.maxCount,
+						skip: input.skip,
+					});
+				},
+			),
+		loadGitRefs: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceGitRefsResponse(),
+				async () => {
+					const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input ?? null);
+					let refsCwd = workspaceScope.workspacePath;
+					if (taskScope) {
+						refsCwd = await resolveTaskCwd({
+							cwd: workspaceScope.workspacePath,
+							taskId: taskScope.taskId,
+							baseRef: taskScope.baseRef,
+							ensure: false,
+						});
+					}
+					return await getGitRefs(refsCwd);
+				},
+			),
+		loadCommitDiff: async (workspaceScope, input) =>
+			byMode(
+				workspaceScope,
+				() => createInPlaceCommitDiffResponse(input.commitHash),
+				async () => {
+					const taskScope = normalizeOptionalTaskWorkspaceScopeInput(input.taskScope ?? null);
+					let diffCwd = workspaceScope.workspacePath;
+					if (taskScope) {
+						diffCwd = await resolveTaskCwd({
+							cwd: workspaceScope.workspacePath,
+							taskId: taskScope.taskId,
+							baseRef: taskScope.baseRef,
+							ensure: false,
+						});
+					}
+					return await getCommitDiff({
+						cwd: diffCwd,
+						commitHash: input.commitHash,
+					});
+				},
+			),
 	};
 }

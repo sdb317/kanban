@@ -1,7 +1,7 @@
 import * as RadixCheckbox from "@radix-ui/react-checkbox";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as RadixSwitch from "@radix-ui/react-switch";
-
+import { resolveInPlaceDefaultBaseRef } from "@runtime-worktree-setting";
 import {
 	ArrowBigUp,
 	ArrowLeft,
@@ -26,7 +26,13 @@ import { TaskPromptComposer } from "@/components/task-prompt-composer";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
-import type { RuntimeAgentId, RuntimeClineReasoningEffort, RuntimeTaskClineSettings } from "@/runtime/types";
+import type {
+	RuntimeAgentId,
+	RuntimeClineReasoningEffort,
+	RuntimeGitRepositoryInfo,
+	RuntimeTaskClineSettings,
+} from "@/runtime/types";
+import { useWorktreeMode } from "@/runtime/worktree-mode";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 import type { TaskAutoReviewMode, TaskImage } from "@/types";
 import { isMacPlatform, pasteShortcutLabel } from "@/utils/platform";
@@ -115,6 +121,7 @@ export function TaskCreateDialog({
 	onAutoReviewModeChange,
 	startInPlanModeDisabled = false,
 	workspaceId,
+	workspaceGit = null,
 	branchRef,
 	branchOptions,
 	onBranchRefChange,
@@ -146,6 +153,7 @@ export function TaskCreateDialog({
 	onAutoReviewModeChange: (value: TaskAutoReviewMode) => void;
 	startInPlanModeDisabled?: boolean;
 	workspaceId: string | null;
+	workspaceGit?: RuntimeGitRepositoryInfo | null;
 	branchRef: string;
 	branchOptions: BranchSelectOption[];
 	onBranchRefChange: (value: string) => void;
@@ -195,6 +203,20 @@ export function TaskCreateDialog({
 		defaultProviderId,
 		defaultModelId,
 	});
+
+	const { isWorktreeMode } = useWorktreeMode();
+
+	// In In-Place Mode the base-ref picker is hidden; tasks submit with the
+	// resolved default base ref instead of a selected branch.
+	const inPlaceDefaultBaseRef = resolveInPlaceDefaultBaseRef(workspaceGit);
+	useEffect(() => {
+		if (!open || isWorktreeMode) {
+			return;
+		}
+		if (branchRef !== inPlaceDefaultBaseRef) {
+			onBranchRefChange(inPlaceDefaultBaseRef);
+		}
+	}, [open, isWorktreeMode, branchRef, inPlaceDefaultBaseRef, onBranchRefChange]);
 
 	const detectedItems = useMemo(() => parseListItems(prompt), [prompt]);
 	const validTaskCount = useMemo(() => taskPrompts.filter((p) => p.trim()).length, [taskPrompts]);
@@ -533,48 +555,52 @@ export function TaskCreateDialog({
 						Start in plan mode
 					</label>
 
-					<div>
-						<span className="text-[11px] text-text-secondary block mb-1">Worktree base ref</span>
-						<BranchSelectDropdown
-							options={branchOptions}
-							selectedValue={branchRef}
-							onSelect={onBranchRefChange}
-							fill
-							size="sm"
-							emptyText="No branches detected"
-						/>
-					</div>
+					{isWorktreeMode ? (
+						<>
+							<div>
+								<span className="text-[11px] text-text-secondary block mb-1">Worktree base ref</span>
+								<BranchSelectDropdown
+									options={branchOptions}
+									selectedValue={branchRef}
+									onSelect={onBranchRefChange}
+									fill
+									size="sm"
+									emptyText="No branches detected"
+								/>
+							</div>
 
-					<div className="flex items-center gap-2 flex-wrap">
-						<label
-							htmlFor={autoReviewEnabledId}
-							className="flex items-center gap-2 text-[12px] text-text-primary cursor-pointer select-none"
-						>
-							<RadixCheckbox.Root
-								id={autoReviewEnabledId}
-								checked={autoReviewEnabled}
-								onCheckedChange={(checked) => onAutoReviewEnabledChange(checked === true)}
-								className="flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm border border-border-bright bg-surface-3 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
-							>
-								<RadixCheckbox.Indicator>
-									<Check size={10} className="text-white" />
-								</RadixCheckbox.Indicator>
-							</RadixCheckbox.Root>
-							Automatically
-						</label>
-						<NativeSelect
-							size="sm"
-							value={autoReviewMode}
-							onChange={(e) => onAutoReviewModeChange(e.currentTarget.value as TaskAutoReviewMode)}
-							style={{ width: "16ch", maxWidth: "100%" }}
-						>
-							{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
-								<option key={option.value} value={option.value}>
-									{option.label}
-								</option>
-							))}
-						</NativeSelect>
-					</div>
+							<div className="flex items-center gap-2 flex-wrap">
+								<label
+									htmlFor={autoReviewEnabledId}
+									className="flex items-center gap-2 text-[12px] text-text-primary cursor-pointer select-none"
+								>
+									<RadixCheckbox.Root
+										id={autoReviewEnabledId}
+										checked={autoReviewEnabled}
+										onCheckedChange={(checked) => onAutoReviewEnabledChange(checked === true)}
+										className="flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm border border-border-bright bg-surface-3 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
+									>
+										<RadixCheckbox.Indicator>
+											<Check size={10} className="text-white" />
+										</RadixCheckbox.Indicator>
+									</RadixCheckbox.Root>
+									Automatically
+								</label>
+								<NativeSelect
+									size="sm"
+									value={autoReviewMode}
+									onChange={(e) => onAutoReviewModeChange(e.currentTarget.value as TaskAutoReviewMode)}
+									style={{ width: "16ch", maxWidth: "100%" }}
+								>
+									{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
+										<option key={option.value} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</NativeSelect>
+							</div>
+						</>
+					) : null}
 
 					{onAgentIdChange && onClineSettingsChange ? (
 						<TaskAgentModelPicker
@@ -614,7 +640,11 @@ export function TaskCreateDialog({
 				</label>
 				{mode === "single" ? (
 					<>
-						<Button size="sm" onClick={handleCreateSingle} disabled={!prompt.trim() || !branchRef}>
+						<Button
+							size="sm"
+							onClick={handleCreateSingle}
+							disabled={!prompt.trim() || (isWorktreeMode && !branchRef)}
+						>
 							<span className="inline-flex items-center">
 								Create
 								<ButtonShortcut />
@@ -627,7 +657,7 @@ export function TaskCreateDialog({
 										variant="primary"
 										size="sm"
 										onClick={() => handleRunSingleStartAction(primaryStartAction)}
-										disabled={!prompt.trim() || !branchRef}
+										disabled={!prompt.trim() || (isWorktreeMode && !branchRef)}
 										className={onCreateStartAndOpen ? "rounded-r-none" : undefined}
 									>
 										<span className="inline-flex items-center">
@@ -640,7 +670,7 @@ export function TaskCreateDialog({
 											<Button
 												variant="primary"
 												size="sm"
-												disabled={!prompt.trim() || !branchRef}
+												disabled={!prompt.trim() || (isWorktreeMode && !branchRef)}
 												className="rounded-l-none border-l border-white/20 px-1"
 												aria-label="More start options"
 											>
@@ -683,7 +713,11 @@ export function TaskCreateDialog({
 					</>
 				) : (
 					<>
-						<Button size="sm" onClick={handleCreateAll} disabled={validTaskCount === 0 || !branchRef}>
+						<Button
+							size="sm"
+							onClick={handleCreateAll}
+							disabled={validTaskCount === 0 || (isWorktreeMode && !branchRef)}
+						>
 							<span className="inline-flex items-center">
 								Create {validTaskCount} {taskCountLabel}
 								<ButtonShortcut />
@@ -694,7 +728,7 @@ export function TaskCreateDialog({
 								variant="primary"
 								size="sm"
 								onClick={handleCreateAndStartAll}
-								disabled={validTaskCount === 0 || !branchRef}
+								disabled={validTaskCount === 0 || (isWorktreeMode && !branchRef)}
 							>
 								<span className="inline-flex items-center">
 									Start {validTaskCount} {taskCountLabel}

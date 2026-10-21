@@ -170,9 +170,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		return null;
 	}
 	const baseRef = typeof card.baseRef === "string" ? card.baseRef.trim() : "";
-	if (!baseRef) {
-		return null;
-	}
 	const title = (typeof card.title === "string" ? card.title.trim() : "") || prompt;
 	if (!title) {
 		return null;
@@ -516,9 +513,6 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 	}
 	const title = typeof draft.title === "string" ? draft.title.trim() : "";
 	const baseRef = draft.baseRef.trim();
-	if (!baseRef) {
-		return { board, updated: false };
-	}
 
 	let updated = false;
 	const columns = board.columns.map((column) => {

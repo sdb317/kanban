@@ -11,6 +11,12 @@ export interface RuntimeShutdownCoordinatorDependencies {
 	warn: (message: string) => void;
 	closeRuntimeServer: () => Promise<void>;
 	skipSessionCleanup?: boolean;
+	/**
+	 * Effective worktree mode for a project. Trash cleanup only deletes task
+	 * worktrees for projects whose effective setting is `true`; In-Place Mode
+	 * projects leave the project folder untouched (Req 12.4, 14.3).
+	 */
+	loadEffectiveWorktreesEnabled: (projectPath: string) => Promise<boolean>;
 }
 
 function moveTaskToTrash(
@@ -230,7 +236,12 @@ export async function shutdownRuntimeServer(deps: RuntimeShutdownCoordinatorDepe
 					resolveSummary: workspace.resolveSummary,
 				},
 			);
-			await cleanupInterruptedTaskWorktrees(workspace.workspacePath, worktreeTaskIds, deps.warn);
+			// Deleting task worktrees only applies in Worktree Mode. In In-Place
+			// Mode there are no managed worktrees, and the Runtime must leave the
+			// project folder untouched during shutdown cleanup (Req 12.4, 14.3).
+			if (await deps.loadEffectiveWorktreesEnabled(workspace.workspacePath)) {
+				await cleanupInterruptedTaskWorktrees(workspace.workspacePath, worktreeTaskIds, deps.warn);
+			}
 		}),
 	);
 

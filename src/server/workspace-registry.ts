@@ -28,6 +28,18 @@ export interface CreateWorkspaceRegistryDependencies {
 	loadRuntimeConfig: (cwd: string) => Promise<RuntimeConfigState>;
 	hasGitRepository: (path: string) => boolean;
 	pathIsDirectory: (path: string) => Promise<boolean>;
+	/**
+	 * Effective worktree mode from the global config only (ignores project
+	 * overrides). Used at launch to decide whether a non-git `cwd` may be
+	 * registered In-Place (Req 10.6, 10.7).
+	 */
+	loadGlobalWorktreesEnabled: () => Promise<boolean>;
+	/**
+	 * Effective worktree mode for a project path (project override -> global ->
+	 * default `false`). Used when pruning stream projects so a non-git project is
+	 * only removed when that project is actually in Worktree Mode (Req 10.9).
+	 */
+	loadEffectiveWorktreesEnabled: (projectPath: string) => Promise<boolean>;
 	onTerminalManagerReady?: (workspaceId: string, manager: TerminalSessionManager) => void;
 }
 
@@ -185,7 +197,11 @@ function toProjectSummary(project: {
 
 export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDependencies): Promise<WorkspaceRegistry> {
 	const launchedFromGitRepo = deps.hasGitRepository(deps.cwd);
-	const initialWorkspace = launchedFromGitRepo ? await loadWorkspaceContext(deps.cwd) : null;
+	// In Worktree Mode we only register the launch `cwd` when it is a git repo.
+	// When the global setting is `false` (In-Place Mode), a non-git launch folder
+	// is registered through `loadWorkspaceContext(cwd)` too (Req 10.6, 10.7).
+	const shouldRegisterLaunchCwd = launchedFromGitRepo || (await deps.loadGlobalWorktreesEnabled()) === false;
+	const initialWorkspace = shouldRegisterLaunchCwd ? await loadWorkspaceContext(deps.cwd) : null;
 	let indexedWorkspace: RuntimeWorkspaceIndexEntry | null = null;
 	if (!initialWorkspace) {
 		const indexedWorkspaces = await listWorkspaceIndexEntries();
@@ -365,7 +381,12 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 			let removalMessage: string | null = null;
 			if (!(await deps.pathIsDirectory(project.repoPath))) {
 				removalMessage = `Project no longer exists on disk and was removed: ${project.repoPath}`;
-			} else if (!deps.hasGitRepository(project.repoPath)) {
+			} else if (
+				!deps.hasGitRepository(project.repoPath) &&
+				(await deps.loadEffectiveWorktreesEnabled(project.repoPath))
+			) {
+				// In In-Place Mode non-git folders are valid projects, so only remove
+				// a "not a git repository" project when it is in Worktree Mode (Req 10.9).
 				removalMessage = `Project is not a git repository and was removed: ${project.repoPath}`;
 			}
 

@@ -4,20 +4,26 @@ import { fetchRuntimeConfig, saveRuntimeConfig } from "@/runtime/runtime-config-
 import type { RuntimeAgentId, RuntimeConfigResponse, RuntimeProjectShortcut } from "@/runtime/types";
 import { useTrpcQuery } from "@/runtime/use-trpc-query";
 
+export interface RuntimeConfigSaveInput {
+	selectedAgentId?: RuntimeAgentId;
+	selectedShortcutLabel?: string | null;
+	agentAutonomousModeEnabled?: boolean;
+	shortcuts?: RuntimeProjectShortcut[];
+	readyForReviewNotificationsEnabled?: boolean;
+	commitPromptTemplate?: string;
+	openPrPromptTemplate?: string;
+	worktreesEnabled?: boolean;
+	projectWorktreesEnabled?: boolean | null;
+}
+
+export type RuntimeConfigSaveResult = { ok: true; config: RuntimeConfigResponse } | { ok: false; error: unknown };
+
 export interface UseRuntimeConfigResult {
 	config: RuntimeConfigResponse | null;
 	isLoading: boolean;
 	isSaving: boolean;
 	refresh: () => void;
-	save: (nextConfig: {
-		selectedAgentId?: RuntimeAgentId;
-		selectedShortcutLabel?: string | null;
-		agentAutonomousModeEnabled?: boolean;
-		shortcuts?: RuntimeProjectShortcut[];
-		readyForReviewNotificationsEnabled?: boolean;
-		commitPromptTemplate?: string;
-		openPrPromptTemplate?: string;
-	}) => Promise<RuntimeConfigResponse | null>;
+	save: (nextConfig: RuntimeConfigSaveInput) => Promise<RuntimeConfigSaveResult>;
 }
 
 export function useRuntimeConfig(
@@ -76,22 +82,14 @@ export function useRuntimeConfig(
 	}, [configQuery.data, configQuery.error, configQuery.isError, configQuery.refetch, open, workspaceId]);
 
 	const save = useCallback(
-		async (nextConfig: {
-			selectedAgentId?: RuntimeAgentId;
-			selectedShortcutLabel?: string | null;
-			agentAutonomousModeEnabled?: boolean;
-			shortcuts?: RuntimeProjectShortcut[];
-			readyForReviewNotificationsEnabled?: boolean;
-			commitPromptTemplate?: string;
-			openPrPromptTemplate?: string;
-		}): Promise<RuntimeConfigResponse | null> => {
+		async (nextConfig: RuntimeConfigSaveInput): Promise<RuntimeConfigSaveResult> => {
 			setIsSaving(true);
 			try {
 				const saved = await saveRuntimeConfig(workspaceId, nextConfig);
 				setConfigData(saved);
-				return saved;
-			} catch {
-				return null;
+				return { ok: true, config: saved };
+			} catch (error) {
+				return { ok: false, error };
 			} finally {
 				setIsSaving(false);
 			}

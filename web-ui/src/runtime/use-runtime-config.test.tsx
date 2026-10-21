@@ -60,6 +60,9 @@ function createRuntimeConfigResponse(selectedAgentId: RuntimeConfigResponse["sel
 		openPrPromptTemplate: "",
 		commitPromptTemplateDefault: "",
 		openPrPromptTemplateDefault: "",
+		globalWorktreesEnabled: true,
+		projectWorktreesEnabled: null,
+		worktreesEnabled: true,
 	};
 }
 

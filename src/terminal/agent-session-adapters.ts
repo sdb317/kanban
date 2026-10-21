@@ -9,10 +9,10 @@ import type {
 	RuntimeTaskImage,
 	RuntimeTaskSessionSummary,
 } from "../core/api-contract";
+import { isHomeAgentSessionId } from "../core/home-agent-session";
 import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
-import { resolveHomeAgentAppendSystemPrompt } from "../prompts/append-system-prompt";
 import { getRuntimeHomePath } from "../state/workspace-state";
 import { configureCodexHooks, hasCodexConfigOverride } from "./codex-hook-config";
 import { createHookRuntimeEnv } from "./hook-runtime-context";
@@ -38,6 +38,15 @@ export interface AgentAdapterLaunchInput {
 	resumeFromTrash?: boolean;
 	env?: Record<string, string | undefined>;
 	workspaceId?: string;
+	/**
+	 * The resolved append-system-prompt for this session (sidebar prompt for home
+	 * agents, In-Place task prompt for task sessions in In-Place Mode, or `null`).
+	 * The mode is resolved once upstream when the session starts; adapters must not
+	 * recompute it. Agents with a native system-prompt channel (Claude, Codex,
+	 * Droid, Kiro, Cline) pass it through their existing flag. Gemini and OpenCode
+	 * have no such channel, so for task sessions only they prepend it to the prompt.
+	 */
+	appendSystemPrompt?: string | null;
 }
 
 export type AgentOutputTransitionDetector = (
@@ -603,13 +612,32 @@ function toBracketedPasteSubmission(command: string): string {
 	return `\u001b[200~${command}\u001b[201~\r`;
 }
 
+/**
+ * Gemini and OpenCode have no append-system-prompt channel. For task sessions only
+ * (not home sidebar sessions), fold the resolved task prompt into the initial prompt
+ * text so the In-Place guidance still reaches the agent. Home sessions are left
+ * unchanged so sidebar behavior for these two agents does not change.
+ */
+function prependTaskAppendSystemPrompt(input: AgentAdapterLaunchInput): string {
+	const prompt = input.prompt;
+	if (isHomeAgentSessionId(input.taskId)) {
+		return prompt;
+	}
+	const appended = input.appendSystemPrompt?.trim();
+	if (!appended) {
+		return prompt;
+	}
+	const trimmedPrompt = prompt.trim();
+	return trimmedPrompt ? `${appended}\n\n${trimmedPrompt}` : appended;
+}
+
 const claudeAdapter: AgentSessionAdapter = {
 	async prepare(input) {
 		const args = [...input.args];
 		const env: Record<string, string | undefined> = {
 			FORCE_HYPERLINK: "1",
 		};
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+		const appendedSystemPrompt = input.appendSystemPrompt ?? null;
 		if (input.autonomousModeEnabled) {
 			// Auto mode is gated behind this env var on Bedrock/Vertex/Foundry; the Anthropic API ignores it.
 			env.CLAUDE_CODE_ENABLE_AUTO_MODE = "1";
@@ -739,7 +767,7 @@ const codexAdapter: AgentSessionAdapter = {
 		const env: Record<string, string | undefined> = {};
 		const binary = input.binary;
 		let deferredStartupInput: string | undefined;
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+		const appendedSystemPrompt = input.appendSystemPrompt ?? null;
 
 		if (!hasCodexConfigOverride(codexArgs, "check_for_update_on_startup")) {
 			codexArgs.push("-c", "check_for_update_on_startup=false");
@@ -866,7 +894,7 @@ const geminiAdapter: AgentSessionAdapter = {
 			env.GEMINI_CLI_SYSTEM_SETTINGS_PATH = configPath;
 		}
 
-		const trimmed = input.prompt.trim();
+		const trimmed = prependTaskAppendSystemPrompt(input).trim();
 		if (trimmed) {
 			args.push("-i", trimmed);
 			return {
@@ -1160,7 +1188,7 @@ const opencodeAdapter: AgentSessionAdapter = {
 			}
 		}
 
-		const trimmed = input.prompt.trim();
+		const trimmed = prependTaskAppendSystemPrompt(input).trim();
 		if (trimmed) {
 			args.push("--prompt", trimmed);
 			return {
@@ -1238,7 +1266,7 @@ const droidAdapter: AgentSessionAdapter = {
 			}
 		}
 
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+		const appendedSystemPrompt = input.appendSystemPrompt ?? null;
 		if (
 			appendedSystemPrompt &&
 			!hasCliOption(args, "--append-system-prompt") &&
@@ -1272,7 +1300,7 @@ const kiroAdapter: AgentSessionAdapter = {
 		}
 
 		const hooks = resolveHookContext(input);
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+		const appendedSystemPrompt = input.appendSystemPrompt ?? null;
 		if (hooks || appendedSystemPrompt) {
 			const configPath = getKiroAgentConfigPath();
 			const config: Record<string, unknown> = {

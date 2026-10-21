@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
 	parseHookIngestRequest,
+	parseShellSessionStartRequest,
 	parseTaskSessionStartRequest,
 	parseWorkspaceFileSearchRequest,
+	parseWorktreeEnsureRequest,
 } from "../../src/core/api-validation";
 
 describe("parseWorkspaceFileSearchRequest", () => {
@@ -87,5 +89,68 @@ describe("parseTaskSessionStartRequest", () => {
 			baseRef: "main",
 			resumeFromTrash: true,
 		});
+	});
+
+	it("throws on empty baseRef by default", () => {
+		expect(() => {
+			parseTaskSessionStartRequest({ taskId: "task-1", prompt: "", baseRef: "   " });
+		}).toThrow("Task session baseRef cannot be empty.");
+	});
+
+	it("accepts empty baseRef when allowEmptyBaseRef is true", () => {
+		const parsed = parseTaskSessionStartRequest(
+			{ taskId: "  task-1  ", prompt: "", baseRef: "   " },
+			{ allowEmptyBaseRef: true },
+		);
+		expect(parsed.taskId).toBe("task-1");
+		expect(parsed.baseRef).toBe("");
+	});
+
+	it("still requires taskId when allowEmptyBaseRef is true", () => {
+		expect(() => {
+			parseTaskSessionStartRequest({ taskId: "   ", prompt: "", baseRef: "" }, { allowEmptyBaseRef: true });
+		}).toThrow("Task session taskId cannot be empty.");
+	});
+});
+
+describe("parseWorktreeEnsureRequest", () => {
+	it("throws on empty baseRef by default", () => {
+		expect(() => {
+			parseWorktreeEnsureRequest({ taskId: "task-1", baseRef: "   " });
+		}).toThrow("Invalid worktree ensure payload.");
+	});
+
+	it("accepts empty baseRef when allowEmptyBaseRef is true", () => {
+		const parsed = parseWorktreeEnsureRequest({ taskId: "  task-1  ", baseRef: "   " }, { allowEmptyBaseRef: true });
+		expect(parsed).toEqual({ taskId: "task-1", baseRef: "" });
+	});
+
+	it("still requires taskId when allowEmptyBaseRef is true", () => {
+		expect(() => {
+			parseWorktreeEnsureRequest({ taskId: "   ", baseRef: "" }, { allowEmptyBaseRef: true });
+		}).toThrow("Invalid worktree ensure payload.");
+	});
+});
+
+describe("parseShellSessionStartRequest", () => {
+	it("throws on empty baseRef by default", () => {
+		expect(() => {
+			parseShellSessionStartRequest({ taskId: "task-1", baseRef: "   " });
+		}).toThrow("Shell session baseRef cannot be empty.");
+	});
+
+	it("accepts empty baseRef when allowEmptyBaseRef is true", () => {
+		const parsed = parseShellSessionStartRequest(
+			{ taskId: "  task-1  ", baseRef: "   " },
+			{ allowEmptyBaseRef: true },
+		);
+		expect(parsed.taskId).toBe("task-1");
+		expect(parsed.baseRef).toBe("");
+	});
+
+	it("still requires taskId when allowEmptyBaseRef is true", () => {
+		expect(() => {
+			parseShellSessionStartRequest({ taskId: "   ", baseRef: "" }, { allowEmptyBaseRef: true });
+		}).toThrow("Shell session taskId cannot be empty.");
 	});
 });

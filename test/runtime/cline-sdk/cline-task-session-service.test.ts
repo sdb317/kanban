@@ -13,6 +13,7 @@ import type { ClineTaskSessionService } from "../../../src/cline-sdk/cline-task-
 import { createInMemoryClineTaskSessionService } from "../../../src/cline-sdk/cline-task-session-service";
 import { createClineWatcherRegistry } from "../../../src/cline-sdk/cline-watcher-registry";
 import type { RuntimeTaskImage, RuntimeTaskSessionMode } from "../../../src/core/api-contract";
+import { resolveHomeAgentAppendSystemPrompt } from "../../../src/prompts/append-system-prompt";
 import { expectedShellCommandLine } from "../../utilities/shell-quote";
 
 const originalArgv = [...process.argv];
@@ -982,10 +983,14 @@ describe("InMemoryClineTaskSessionService", () => {
 		const { service, runtime } = createTrackedService();
 		setKanbanProcessContext();
 
+		// The service no longer self-resolves the sidebar prompt; the runtime passes it in as
+		// `appendSystemPrompt` (resolved via the shared resolver). This mirrors the task 8.3 wiring.
+		const taskId = "__home_agent__:workspace-1:cline";
 		await service.startTaskSession({
-			taskId: "__home_agent__:workspace-1:cline",
+			taskId,
 			cwd: "/tmp/worktree",
 			prompt: "Add a task",
+			appendSystemPrompt: resolveHomeAgentAppendSystemPrompt(taskId),
 		});
 		await vi.waitFor(() => {
 			expect(runtime.startTaskSessionMock).toHaveBeenCalledTimes(1);
