@@ -67,13 +67,12 @@ function writeFakeCommand(binDir: string, command: string): void {
 
 describe.sequential("runtime-config auto agent selection", () => {
 	it("selects agents using the configured priority order", () => {
-		expect(pickBestInstalledAgentIdFromDetected(["codex", "opencode", "gemini"])).toBe("codex");
-		expect(pickBestInstalledAgentIdFromDetected(["opencode", "droid", "gemini"])).toBe("droid");
-		expect(pickBestInstalledAgentIdFromDetected(["kiro-cli", "gemini"])).toBe("kiro");
-		expect(pickBestInstalledAgentIdFromDetected(["droid", "gemini", "cline"])).toBe("droid");
-		expect(pickBestInstalledAgentIdFromDetected(["gemini", "cline"])).toBeNull();
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "cline"])).toBe("claude");
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "droid"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["kiro-cli", "claude", "cline"])).toBe("kiro");
+		expect(pickBestInstalledAgentIdFromDetected(["claude", "cline"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["cline", "claude"])).toBe("claude");
+		// Codex, Droid, OpenCode and Gemini are not launch-supported, so they are never auto-selected.
+		expect(pickBestInstalledAgentIdFromDetected(["codex", "opencode", "gemini"])).toBeNull();
+		expect(pickBestInstalledAgentIdFromDetected(["droid", "gemini"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected(["cline"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected([])).toBeNull();
 	});
@@ -87,9 +86,10 @@ describe.sequential("runtime-config auto agent selection", () => {
 		const { path: tempBin, cleanup: cleanupBin } = createTempDir("kanban-bin-runtime-config-");
 
 		try {
-			writeFakeCommand(tempBin, "opencode");
-			writeFakeCommand(tempBin, "codex");
+			// Include a non-selectable CLI (gemini) alongside a launch-supported one (claude)
+			// to confirm auto-selection honors the supported priority order.
 			writeFakeCommand(tempBin, "gemini");
+			writeFakeCommand(tempBin, "claude");
 
 			const previousShell = process.env.SHELL;
 			try {
@@ -97,7 +97,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				const isolatedPath = `${tempBin}${delimiter}/usr/bin${delimiter}/bin`;
 				await withTemporaryEnv({ home: tempHome, pathPrefix: isolatedPath, replacePath: true }, async () => {
 					const state = await loadRuntimeConfig(tempProject);
-					expect(state.selectedAgentId).toBe("codex");
+					expect(state.selectedAgentId).toBe("claude");
 					const persisted = JSON.parse(
 						readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
 					) as {
@@ -107,14 +107,14 @@ describe.sequential("runtime-config auto agent selection", () => {
 						commitPromptTemplate?: string;
 						openPrPromptTemplate?: string;
 					};
-					expect(persisted.selectedAgentId).toBe("codex");
+					expect(persisted.selectedAgentId).toBe("claude");
 					expect(persisted.agentAutonomousModeEnabled).toBeUndefined();
 					expect(persisted.readyForReviewNotificationsEnabled).toBeUndefined();
 					expect(persisted.commitPromptTemplate).toBeUndefined();
 					expect(persisted.openPrPromptTemplate).toBeUndefined();
 
 					const reloadedState = await loadRuntimeConfig(tempProject);
-					expect(reloadedState.selectedAgentId).toBe("codex");
+					expect(reloadedState.selectedAgentId).toBe("claude");
 				});
 			} finally {
 				if (previousShell === undefined) {
@@ -144,7 +144,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				process.env.SHELL = "/definitely-not-a-shell";
 				await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin, replacePath: true }, async () => {
 					const state = await loadRuntimeConfig(tempProject);
-					expect(state.selectedAgentId).toBe("cline");
+					expect(state.selectedAgentId).toBe("kiro");
 					expect(existsSync(join(tempHome, ".cline", "kanban", "config.json"))).toBe(false);
 				});
 			} finally {
@@ -172,9 +172,9 @@ describe.sequential("runtime-config auto agent selection", () => {
 				expect(state.shortcuts).toEqual([]);
 
 				const updated = await updateRuntimeConfig(tempHome, {
-					selectedAgentId: "codex",
+					selectedAgentId: "claude",
 				});
-				expect(updated.selectedAgentId).toBe("codex");
+				expect(updated.selectedAgentId).toBe("claude");
 				expect(updated.projectConfigPath).toBeNull();
 
 				const globalPayload = JSON.parse(
@@ -183,7 +183,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					selectedAgentId?: string;
 					shortcuts?: unknown;
 				};
-				expect(globalPayload.selectedAgentId).toBe("codex");
+				expect(globalPayload.selectedAgentId).toBe("claude");
 				expect(globalPayload.shortcuts).toBeUndefined();
 			});
 		} finally {
@@ -231,7 +231,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 			await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin }, async () => {
 				const state = await loadRuntimeConfig(tempProject);
-				expect(state.selectedAgentId).toBe("cline");
+				expect(state.selectedAgentId).toBe("kiro");
 			});
 		} finally {
 			cleanupBin();
@@ -264,7 +264,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 			await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin }, async () => {
 				const state = await loadRuntimeConfig(tempProject);
-				expect(state.selectedAgentId).toBe("cline");
+				expect(state.selectedAgentId).toBe("kiro");
 			});
 		} finally {
 			cleanupBin();
@@ -287,7 +287,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "kiro",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
@@ -332,7 +332,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "kiro",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
@@ -359,7 +359,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "kiro",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
@@ -390,9 +390,9 @@ describe.sequential("runtime-config auto agent selection", () => {
 				await loadRuntimeConfig(tempProject);
 
 				const updated = await updateRuntimeConfig(tempProject, {
-					selectedAgentId: "codex",
+					selectedAgentId: "claude",
 				});
-				expect(updated.selectedAgentId).toBe("codex");
+				expect(updated.selectedAgentId).toBe("claude");
 
 				const globalPayload = JSON.parse(
 					readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
@@ -402,7 +402,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					agentAutonomousModeEnabled?: boolean;
 					readyForReviewNotificationsEnabled?: boolean;
 				};
-				expect(globalPayload.selectedAgentId).toBe("codex");
+				expect(globalPayload.selectedAgentId).toBe("claude");
 				expect(globalPayload.selectedShortcutLabel).toBeUndefined();
 				expect(globalPayload.agentAutonomousModeEnabled).toBeUndefined();
 				expect(globalPayload.readyForReviewNotificationsEnabled).toBeUndefined();
@@ -452,18 +452,18 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 				const [selectedAgentState, autonomousModeState] = await Promise.all([
 					updateRuntimeConfig(tempProject, {
-						selectedAgentId: "codex",
+						selectedAgentId: "claude",
 					}),
 					updateRuntimeConfig(tempProject, {
 						agentAutonomousModeEnabled: false,
 					}),
 				]);
 
-				expect(selectedAgentState.selectedAgentId).toBe("codex");
+				expect(selectedAgentState.selectedAgentId).toBe("claude");
 				expect(autonomousModeState.agentAutonomousModeEnabled).toBe(false);
 
 				const reloaded = await loadRuntimeConfig(tempProject);
-				expect(reloaded.selectedAgentId).toBe("codex");
+				expect(reloaded.selectedAgentId).toBe("claude");
 				expect(reloaded.agentAutonomousModeEnabled).toBe(false);
 			});
 		} finally {

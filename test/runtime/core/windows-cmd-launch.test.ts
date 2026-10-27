@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { shouldUseWindowsCmdLaunch } from "../../../src/core/windows-cmd-launch";
+import { resolveWindowsExecutableAbsolutePath, shouldUseWindowsCmdLaunch } from "../../../src/core/windows-cmd-launch";
 
 function createWindowsBinary(directory: string, fileName: string): string {
 	const filePath = join(directory, fileName);
@@ -98,5 +98,79 @@ describe("shouldUseWindowsCmdLaunch", () => {
 				ComSpec: "C:\\Windows\\System32\\cmd.exe",
 			}),
 		).toBe(true);
+	});
+});
+
+describe("resolveWindowsExecutableAbsolutePath", () => {
+	const tempDirectories: string[] = [];
+
+	afterEach(() => {
+		for (const directory of tempDirectories) {
+			rmSync(directory, { recursive: true, force: true });
+		}
+		tempDirectories.length = 0;
+	});
+
+	it("resolves a bare name to its absolute .exe path via PATH and PATHEXT", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-resolve-"));
+		tempDirectories.push(tempDirectory);
+		const expected = createWindowsBinary(tempDirectory, "kiro-cli.exe");
+
+		expect(
+			resolveWindowsExecutableAbsolutePath("kiro-cli", {
+				PATH: tempDirectory,
+				PATHEXT: ".com;.exe;.bat;.cmd",
+			}),
+		).toBe(expected);
+	});
+
+	it("resolves a bare name supplied with an explicit extension", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-resolve-"));
+		tempDirectories.push(tempDirectory);
+		const expected = createWindowsBinary(tempDirectory, "kiro-cli.exe");
+
+		expect(
+			resolveWindowsExecutableAbsolutePath("kiro-cli.exe", {
+				PATH: tempDirectory,
+				PATHEXT: ".com;.exe;.bat;.cmd",
+			}),
+		).toBe(expected);
+	});
+
+	it("treats Windows env keys case-insensitively", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-resolve-"));
+		tempDirectories.push(tempDirectory);
+		const expected = createWindowsBinary(tempDirectory, "kiro-cli.exe");
+
+		expect(
+			resolveWindowsExecutableAbsolutePath("kiro-cli", {
+				Path: tempDirectory,
+				Pathext: ".com;.exe;.bat;.cmd",
+			}),
+		).toBe(expected);
+	});
+
+	it("returns an existing absolute path unchanged", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-resolve-"));
+		tempDirectories.push(tempDirectory);
+		const absolute = createWindowsBinary(tempDirectory, "kiro-cli.exe");
+
+		expect(resolveWindowsExecutableAbsolutePath(absolute, { PATH: "" })).toBe(absolute);
+	});
+
+	it("returns null when the binary cannot be found on PATH", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-resolve-"));
+		tempDirectories.push(tempDirectory);
+
+		expect(
+			resolveWindowsExecutableAbsolutePath("kiro-cli", {
+				PATH: tempDirectory,
+				PATHEXT: ".com;.exe;.bat;.cmd",
+			}),
+		).toBeNull();
+	});
+
+	it("returns null for an empty binary name", () => {
+		expect(resolveWindowsExecutableAbsolutePath("   ", { PATH: "" })).toBeNull();
 	});
 });

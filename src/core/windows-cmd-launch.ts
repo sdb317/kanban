@@ -96,6 +96,71 @@ function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): 
 	return null;
 }
 
+/**
+ * Resolve a Windows executable to its absolute path by scanning PATH × PATHEXT,
+ * mirroring how cmd.exe locates a bare command name. node-pty's Windows backend
+ * does not search PATH or apply PATHEXT, so a bare name like `kiro-cli` (or even
+ * `kiro-cli.exe` without a directory) fails with "File not found" when spawned
+ * directly. Callers that bypass the cmd wrapper must pass an absolute path.
+ *
+ * Returns the absolute path when found, otherwise `null`. A binary that already
+ * includes directory separators is resolved against PATHEXT in place; one that
+ * already has an extension and exists is returned as-is.
+ */
+export function resolveWindowsExecutableAbsolutePath(
+	binary: string,
+	env: NodeJS.ProcessEnv = process.env,
+): string | null {
+	const trimmed = binary.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	const explicitExtension = extname(trimmed);
+	const hasDirectorySeparators = trimmed.includes("\\") || trimmed.includes("/");
+
+	if (hasDirectorySeparators) {
+		if (explicitExtension) {
+			return canAccessPath(trimmed) ? trimmed : null;
+		}
+		for (const pathExtension of getWindowsPathExtensions(env)) {
+			const candidate = `${trimmed}${pathExtension}`;
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	const pathEntries = (getWindowsEnvValue(env, "PATH") ?? "")
+		.split(";")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	if (pathEntries.length === 0) {
+		return null;
+	}
+
+	if (explicitExtension) {
+		for (const pathEntry of pathEntries) {
+			const candidate = join(pathEntry, trimmed);
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	for (const pathEntry of pathEntries) {
+		for (const pathExtension of getWindowsPathExtensions(env)) {
+			const candidate = join(pathEntry, `${trimmed}${pathExtension}`);
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+	}
+	return null;
+}
+
 function normalizeWindowsCmdArgument(value: string): string {
 	return value.replaceAll("\r\n", "\n").replaceAll("\r", "\n").replaceAll("\n", "\\n");
 }

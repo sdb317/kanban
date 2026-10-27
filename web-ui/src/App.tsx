@@ -819,34 +819,34 @@ export default function App(): ReactElement {
 
 	return (
 		<LayoutCustomizationsProvider onResetBottomTerminalLayoutCustomizations={resetBottomTerminalLayoutCustomizations}>
-			<div className="flex h-[100svh] min-w-0 overflow-hidden">
-				{!selectedCard ? (
-					<ProjectNavigationPanel
-						projects={displayedProjects}
-						isLoadingProjects={isProjectListLoading}
-						currentProjectId={navigationCurrentProjectId}
-						removingProjectId={removingProjectId}
-						activeSection={homeSidebarSection}
-						onActiveSectionChange={setHomeSidebarSection}
-						canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
-						agentSectionContent={homeSidebarAgentPanel}
-						selectedAgentId={settingsRuntimeProjectConfig?.selectedAgentId ?? null}
-						clineProviderSettings={settingsRuntimeProjectConfig?.clineProviderSettings ?? null}
-						featurebaseFeedbackState={featurebaseFeedbackState}
-						onSelectProject={(projectId) => {
-							void handleSelectProject(projectId);
-						}}
-						onRemoveProject={handleRemoveProject}
-						onAddProject={() => {
-							void handleAddProject();
-						}}
-						sidebarWidth={sidebarLayout.sidebarWidth}
-						setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
-						isCollapsed={sidebarLayout.isCollapsed}
-						setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
-					/>
-				) : null}
-				<WorktreeModeProvider value={worktreesEnabled}>
+			<WorktreeModeProvider value={worktreesEnabled}>
+				<div className="flex h-[100svh] min-w-0 overflow-hidden">
+					{!selectedCard ? (
+						<ProjectNavigationPanel
+							projects={displayedProjects}
+							isLoadingProjects={isProjectListLoading}
+							currentProjectId={navigationCurrentProjectId}
+							removingProjectId={removingProjectId}
+							activeSection={homeSidebarSection}
+							onActiveSectionChange={setHomeSidebarSection}
+							canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
+							agentSectionContent={homeSidebarAgentPanel}
+							selectedAgentId={settingsRuntimeProjectConfig?.selectedAgentId ?? null}
+							clineProviderSettings={settingsRuntimeProjectConfig?.clineProviderSettings ?? null}
+							featurebaseFeedbackState={featurebaseFeedbackState}
+							onSelectProject={(projectId) => {
+								void handleSelectProject(projectId);
+							}}
+							onRemoveProject={handleRemoveProject}
+							onAddProject={() => {
+								void handleAddProject();
+							}}
+							sidebarWidth={sidebarLayout.sidebarWidth}
+							setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
+							isCollapsed={sidebarLayout.isCollapsed}
+							setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
+						/>
+					) : null}
 					<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 						<TopBar
 							onToggleSidebar={!selectedCard ? handleToggleSidebar : undefined}
@@ -1100,121 +1100,121 @@ export default function App(): ReactElement {
 							) : null}
 						</div>
 					</div>
-				</WorktreeModeProvider>
-				<RuntimeSettingsDialog
-					open={isSettingsOpen}
-					workspaceId={settingsWorkspaceId}
-					initialConfig={settingsRuntimeProjectConfig}
-					liveMcpAuthStatuses={latestMcpAuthStatuses}
-					initialSection={settingsInitialSection}
-					onOpenChange={(nextOpen) => {
-						setIsSettingsOpen(nextOpen);
-						if (!nextOpen) {
-							setSettingsInitialSection(null);
-						}
-					}}
-					onSaved={() => {
-						refreshRuntimeProjectConfig();
-						refreshSettingsRuntimeProjectConfig();
-					}}
-					onAccountSwitched={refreshKanbanAccess}
-				/>
-				<DebugDialog
-					open={isDebugDialogOpen}
-					onOpenChange={handleDebugDialogOpenChange}
-					isResetAllStatePending={isResetAllStatePending}
-					onShowStartupOnboardingDialog={handleShowStartupOnboardingDialog}
-					onResetAllState={handleResetAllState}
-				/>
-				<TaskCreateDialog
-					open={isInlineTaskCreateOpen}
-					onOpenChange={handleCreateDialogOpenChange}
-					prompt={newTaskPrompt}
-					onPromptChange={setNewTaskPrompt}
-					images={newTaskImages}
-					onImagesChange={setNewTaskImages}
-					onCreate={handleCreateTask}
-					onCreateAndStart={handleCreateAndStartTask}
-					onCreateStartAndOpen={handleCreateStartAndOpenTask}
-					onCreateMultiple={handleCreateTasks}
-					onCreateAndStartMultiple={handleCreateAndStartTasks}
-					startInPlanMode={newTaskStartInPlanMode}
-					onStartInPlanModeChange={setNewTaskStartInPlanMode}
-					startInPlanModeDisabled={isNewTaskStartInPlanModeDisabled}
-					autoReviewEnabled={newTaskAutoReviewEnabled}
-					onAutoReviewEnabledChange={setNewTaskAutoReviewEnabled}
-					autoReviewMode={newTaskAutoReviewMode}
-					onAutoReviewModeChange={setNewTaskAutoReviewMode}
-					workspaceId={currentProjectId}
-					workspaceGit={workspaceGit}
-					branchRef={newTaskBranchRef}
-					branchOptions={createTaskBranchOptions}
-					onBranchRefChange={setNewTaskBranchRef}
-					agentId={newTaskAgentId}
-					onAgentIdChange={setNewTaskAgentId}
-					clineSettings={newTaskClineSettings}
-					onClineSettingsChange={setNewTaskClineSettings}
-					defaultAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
-					defaultProviderId={defaultTaskClineProviderId}
-					defaultModelId={runtimeProjectConfig?.clineProviderSettings?.modelId ?? null}
-					defaultReasoningEffort={runtimeProjectConfig?.clineProviderSettings?.reasoningEffort ?? null}
-				/>
-				<ClearTrashDialog
-					open={isClearTrashDialogOpen}
-					taskCount={trashTaskCount}
-					onCancel={() => setIsClearTrashDialogOpen(false)}
-					onConfirm={handleConfirmClearTrash}
-				/>
-				<StartupOnboardingDialog
-					open={isStartupOnboardingDialogOpen}
-					onClose={handleCloseStartupOnboardingDialog}
-					selectedAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
-					agents={runtimeProjectConfig?.agents ?? []}
-					clineProviderSettings={runtimeProjectConfig?.clineProviderSettings ?? null}
-					workspaceId={currentProjectId}
-					runtimeConfig={runtimeProjectConfig ?? null}
-					onSelectAgent={handleSelectOnboardingAgent}
-					onClineSetupSaved={handleOnboardingClineSetupSaved}
-				/>
+					<RuntimeSettingsDialog
+						open={isSettingsOpen}
+						workspaceId={settingsWorkspaceId}
+						initialConfig={settingsRuntimeProjectConfig}
+						liveMcpAuthStatuses={latestMcpAuthStatuses}
+						initialSection={settingsInitialSection}
+						onOpenChange={(nextOpen) => {
+							setIsSettingsOpen(nextOpen);
+							if (!nextOpen) {
+								setSettingsInitialSection(null);
+							}
+						}}
+						onSaved={() => {
+							refreshRuntimeProjectConfig();
+							refreshSettingsRuntimeProjectConfig();
+						}}
+						onAccountSwitched={refreshKanbanAccess}
+					/>
+					<DebugDialog
+						open={isDebugDialogOpen}
+						onOpenChange={handleDebugDialogOpenChange}
+						isResetAllStatePending={isResetAllStatePending}
+						onShowStartupOnboardingDialog={handleShowStartupOnboardingDialog}
+						onResetAllState={handleResetAllState}
+					/>
+					<TaskCreateDialog
+						open={isInlineTaskCreateOpen}
+						onOpenChange={handleCreateDialogOpenChange}
+						prompt={newTaskPrompt}
+						onPromptChange={setNewTaskPrompt}
+						images={newTaskImages}
+						onImagesChange={setNewTaskImages}
+						onCreate={handleCreateTask}
+						onCreateAndStart={handleCreateAndStartTask}
+						onCreateStartAndOpen={handleCreateStartAndOpenTask}
+						onCreateMultiple={handleCreateTasks}
+						onCreateAndStartMultiple={handleCreateAndStartTasks}
+						startInPlanMode={newTaskStartInPlanMode}
+						onStartInPlanModeChange={setNewTaskStartInPlanMode}
+						startInPlanModeDisabled={isNewTaskStartInPlanModeDisabled}
+						autoReviewEnabled={newTaskAutoReviewEnabled}
+						onAutoReviewEnabledChange={setNewTaskAutoReviewEnabled}
+						autoReviewMode={newTaskAutoReviewMode}
+						onAutoReviewModeChange={setNewTaskAutoReviewMode}
+						workspaceId={currentProjectId}
+						workspaceGit={workspaceGit}
+						branchRef={newTaskBranchRef}
+						branchOptions={createTaskBranchOptions}
+						onBranchRefChange={setNewTaskBranchRef}
+						agentId={newTaskAgentId}
+						onAgentIdChange={setNewTaskAgentId}
+						clineSettings={newTaskClineSettings}
+						onClineSettingsChange={setNewTaskClineSettings}
+						defaultAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
+						defaultProviderId={defaultTaskClineProviderId}
+						defaultModelId={runtimeProjectConfig?.clineProviderSettings?.modelId ?? null}
+						defaultReasoningEffort={runtimeProjectConfig?.clineProviderSettings?.reasoningEffort ?? null}
+					/>
+					<ClearTrashDialog
+						open={isClearTrashDialogOpen}
+						taskCount={trashTaskCount}
+						onCancel={() => setIsClearTrashDialogOpen(false)}
+						onConfirm={handleConfirmClearTrash}
+					/>
+					<StartupOnboardingDialog
+						open={isStartupOnboardingDialogOpen}
+						onClose={handleCloseStartupOnboardingDialog}
+						selectedAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
+						agents={runtimeProjectConfig?.agents ?? []}
+						clineProviderSettings={runtimeProjectConfig?.clineProviderSettings ?? null}
+						workspaceId={currentProjectId}
+						runtimeConfig={runtimeProjectConfig ?? null}
+						onSelectAgent={handleSelectOnboardingAgent}
+						onClineSetupSaved={handleOnboardingClineSetupSaved}
+					/>
 
-				<AddProjectDialog
-					open={isAddProjectDialogOpen}
-					onOpenChange={setIsAddProjectDialogOpen}
-					onProjectAdded={handleAddProjectSuccess}
-					currentProjectId={currentProjectId}
-					initialGitInitPath={pendingNativeGitInitPath}
-				/>
+					<AddProjectDialog
+						open={isAddProjectDialogOpen}
+						onOpenChange={setIsAddProjectDialogOpen}
+						onProjectAdded={handleAddProjectSuccess}
+						currentProjectId={currentProjectId}
+						initialGitInitPath={pendingNativeGitInitPath}
+					/>
 
-				<UpdateNotificationController />
+					<UpdateNotificationController />
 
-				<AlertDialog
-					open={gitActionError !== null}
-					onOpenChange={(open) => {
-						if (!open) {
-							clearGitActionError();
-						}
-					}}
-				>
-					<AlertDialogHeader>
-						<AlertDialogTitle>{gitActionErrorTitle}</AlertDialogTitle>
-					</AlertDialogHeader>
-					<AlertDialogBody>
-						<p>{gitActionError?.message}</p>
-						{gitActionError?.output ? (
-							<pre className="max-h-[220px] overflow-auto rounded-md bg-surface-0 p-3 font-mono text-xs text-text-secondary whitespace-pre-wrap">
-								{gitActionError.output}
-							</pre>
-						) : null}
-					</AlertDialogBody>
-					<AlertDialogFooter className="justify-end">
-						<AlertDialogAction asChild>
-							<Button variant="default" onClick={clearGitActionError}>
-								Close
-							</Button>
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialog>
-			</div>
+					<AlertDialog
+						open={gitActionError !== null}
+						onOpenChange={(open) => {
+							if (!open) {
+								clearGitActionError();
+							}
+						}}
+					>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{gitActionErrorTitle}</AlertDialogTitle>
+						</AlertDialogHeader>
+						<AlertDialogBody>
+							<p>{gitActionError?.message}</p>
+							{gitActionError?.output ? (
+								<pre className="max-h-[220px] overflow-auto rounded-md bg-surface-0 p-3 font-mono text-xs text-text-secondary whitespace-pre-wrap">
+									{gitActionError.output}
+								</pre>
+							) : null}
+						</AlertDialogBody>
+						<AlertDialogFooter className="justify-end">
+							<AlertDialogAction asChild>
+								<Button variant="default" onClick={clearGitActionError}>
+									Close
+								</Button>
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialog>
+				</div>
+			</WorktreeModeProvider>
 		</LayoutCustomizationsProvider>
 	);
 }

@@ -3,6 +3,7 @@ import * as pty from "node-pty";
 import {
 	buildWindowsCmdArgsCommandLine,
 	resolveWindowsComSpec,
+	resolveWindowsExecutableAbsolutePath,
 	shouldUseWindowsCmdLaunch,
 } from "../core/windows-cmd-launch";
 
@@ -88,7 +89,14 @@ export class PtySession {
 		const terminalName = env?.TERM?.trim() || process.env.TERM?.trim() || "xterm-256color";
 		const launchEnv: NodeJS.ProcessEnv = env ? { ...process.env, ...env } : process.env;
 		const useWindowsShellLaunch = shouldUseWindowsCmdLaunch(binary, process.platform, launchEnv);
-		const spawnBinary = useWindowsShellLaunch ? resolveWindowsComSpec(launchEnv) : binary;
+		// node-pty's Windows backend spawns the binary directly without searching PATH or
+		// applying PATHEXT, so a bare name like `kiro-cli` fails with "File not found" even
+		// when `kiro-cli.exe` is on PATH. When we bypass the cmd wrapper, resolve the binary
+		// to its absolute path first; fall back to the original name if resolution fails so
+		// the launch error still surfaces.
+		const directSpawnBinary =
+			process.platform === "win32" ? (resolveWindowsExecutableAbsolutePath(binary, launchEnv) ?? binary) : binary;
+		const spawnBinary = useWindowsShellLaunch ? resolveWindowsComSpec(launchEnv) : directSpawnBinary;
 		const spawnArgs = useWindowsShellLaunch ? buildWindowsCmdArgsCommandLine(binary, normalizedArgs) : normalizedArgs;
 		const ptyOptions: pty.IPtyForkOptions = {
 			name: terminalName,

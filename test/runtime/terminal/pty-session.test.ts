@@ -126,12 +126,13 @@ describe("PtySession", () => {
 		expect(ptyMocks.spawn.mock.calls[0]?.[1]).toBe('/d /s /c "cline"');
 	});
 
-	it("launches bare executables directly on Windows when PATH resolves to .exe", () => {
+	it("resolves a bare .exe to its absolute path for direct launch on Windows", () => {
 		setPlatform("win32");
 		process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
 		process.env.PATHEXT = ".com;.exe;.bat;.cmd";
 		const windowsBinDir = mkdtempSync(join(tmpdir(), "kanban-win-path-"));
-		writeFileSync(join(windowsBinDir, "codex.exe"), "");
+		const resolvedExecutable = join(windowsBinDir, "codex.exe");
+		writeFileSync(resolvedExecutable, "");
 		process.env.PATH = "";
 
 		const ptyProcess = createMockPtyProcess();
@@ -155,7 +156,9 @@ describe("PtySession", () => {
 		}
 
 		expect(ptyMocks.spawn).toHaveBeenCalledTimes(1);
-		expect(ptyMocks.spawn.mock.calls[0]?.[0]).toBe("codex");
+		// node-pty does not search PATH on Windows, so the direct-launch branch must
+		// resolve the bare name to its absolute .exe path.
+		expect(ptyMocks.spawn.mock.calls[0]?.[0]).toBe(resolvedExecutable);
 		expect(ptyMocks.spawn.mock.calls[0]?.[1]).toEqual(["--foo", "bar"]);
 	});
 
@@ -204,19 +207,36 @@ describe("PtySession", () => {
 	it("does not wrap cmd itself on Windows", () => {
 		setPlatform("win32");
 		process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
+		process.env.PATHEXT = ".com;.exe;.bat;.cmd";
+		process.env.PATH = "";
+		const windowsBinDir = mkdtempSync(join(tmpdir(), "kanban-win-cmd-"));
+		const resolvedCmd = join(windowsBinDir, "cmd.exe");
+		writeFileSync(resolvedCmd, "");
+
 		const ptyProcess = createMockPtyProcess();
 		ptyMocks.spawn.mockReturnValue(ptyProcess);
 
-		PtySession.spawn({
-			binary: "cmd.exe",
-			args: ["/c", "echo hi"],
-			cwd: "C:/repo",
-			cols: 120,
-			rows: 40,
-		});
+		try {
+			PtySession.spawn({
+				binary: "cmd.exe",
+				args: ["/c", "echo hi"],
+				cwd: "C:/repo",
+				env: {
+					PATH: windowsBinDir,
+					PATHEXT: ".com;.exe;.bat;.cmd",
+					ComSpec: "C:\\Windows\\System32\\cmd.exe",
+				},
+				cols: 120,
+				rows: 40,
+			});
+		} finally {
+			rmSync(windowsBinDir, { recursive: true, force: true });
+		}
 
 		expect(ptyMocks.spawn).toHaveBeenCalledTimes(1);
-		expect(ptyMocks.spawn.mock.calls[0]?.[0]).toBe("cmd.exe");
+		// cmd is launched directly (never wrapped in another cmd), resolved to its absolute path.
+		expect(ptyMocks.spawn.mock.calls[0]?.[0]).toBe(resolvedCmd);
+		expect(ptyMocks.spawn.mock.calls[0]?.[1]).toEqual(["/c", "echo hi"]);
 	});
 
 	it("ignores resize calls after the pty has exited", () => {

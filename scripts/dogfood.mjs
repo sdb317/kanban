@@ -267,6 +267,11 @@ function runCommand(command, args, spawnOptions = {}) {
 	return new Promise((resolveExit, reject) => {
 		const child = spawn(command, args, {
 			stdio: "inherit",
+			// On Windows, npm resolves to npm.cmd. Since Node 18.20/20.12/22,
+			// spawning a .cmd/.bat directly without a shell throws EINVAL
+			// (the CVE-2024-27980 fix). Running through a shell restores the
+			// ability to launch the npm wrapper.
+			shell: process.platform === "win32",
 			...spawnOptions,
 		});
 

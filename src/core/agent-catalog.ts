@@ -11,6 +11,14 @@ export interface RuntimeAgentCatalogEntry {
 
 export const RUNTIME_AGENT_CATALOG: RuntimeAgentCatalogEntry[] = [
 	{
+		id: "kiro",
+		label: "Kiro",
+		binary: "kiro-cli",
+		baseArgs: ["chat"],
+		autonomousArgs: ["--trust-all-tools"],
+		installUrl: "https://kiro.dev",
+	},
+	{
 		id: "claude",
 		label: "Claude Code",
 		binary: "claude",
@@ -51,14 +59,6 @@ export const RUNTIME_AGENT_CATALOG: RuntimeAgentCatalogEntry[] = [
 		installUrl: "https://docs.factory.ai/cli/getting-started/quickstart",
 	},
 	{
-		id: "kiro",
-		label: "Kiro",
-		binary: "kiro-cli",
-		baseArgs: ["chat"],
-		autonomousArgs: ["--trust-all-tools"],
-		installUrl: "https://kiro.dev",
-	},
-	{
 		id: "gemini",
 		label: "Gemini CLI",
 		binary: "gemini",
@@ -71,11 +71,12 @@ export const RUNTIME_AGENT_CATALOG: RuntimeAgentCatalogEntry[] = [
 // Temporarily keep launch support scoped to the core agent set.
 // Re-enable additional CLIs by uncommenting entries below when ready.
 export const RUNTIME_LAUNCH_SUPPORTED_AGENT_IDS: readonly RuntimeAgentId[] = [
-	"cline",
-	"claude",
-	"codex",
-	"droid",
 	"kiro",
+	"claude",
+	"cline",
+	// Hidden from the UI; re-enable by uncommenting.
+	// "codex",
+	// "droid",
 	// "opencode",
 	// "gemini",
 ];
