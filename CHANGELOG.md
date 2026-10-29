@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1]
+
+- Switched from ephemeral git worktrees to in-place editing — agents now work directly in your main working tree instead of isolated worktree copies, removing the complexity of worktree setup, symlinked node_modules, and merge-back workflows
+- Kiro is now the default agent, replacing Cline CLI as the out-of-the-box agent for new installations
+
 ## [0.1.70]
 
 - Fixed a freeze that could occur when clearing completed tasks on large boards by limiting cleanup concurrency
