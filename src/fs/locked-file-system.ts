@@ -48,6 +48,78 @@ export interface AtomicTextWriteOptions {
 
 const RELEASE_RACE_SYSCALLS: ReadonlySet<string> = new Set(["utime", "utimes", "stat"]);
 
+/**
+ * Windows reports these codes when `rename` cannot replace the destination
+ * because another process (antivirus, Search indexer, an editor, or the agent
+ * CLI itself) still holds the target file open. Unlike POSIX, Windows does not
+ * perform an atomic replace-on-rename, so the call throws instead of silently
+ * swapping the inode. These failures are almost always transient.
+ */
+const RENAME_RETRYABLE_CODES: ReadonlySet<string> = new Set(["EPERM", "EACCES", "EBUSY", "EEXIST"]);
+const RENAME_MAX_ATTEMPTS = 10;
+const RENAME_BASE_DELAY_MS = 20;
+
+function isRetryableRenameError(error: unknown): boolean {
+	if (process.platform !== "win32") {
+		return false;
+	}
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		typeof error.code === "string" &&
+		RENAME_RETRYABLE_CODES.has(error.code)
+	);
+}
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Replace `destination` with `tempPath` atomically. On Windows, retry with
+ * linear backoff when the destination is transiently locked, then fall back to
+ * an in-place overwrite so a persistent lock does not leave the write unapplied.
+ * The temp file is always cleaned up, even on failure.
+ */
+async function renameWithRetry(tempPath: string, destination: string): Promise<void> {
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= RENAME_MAX_ATTEMPTS; attempt++) {
+		try {
+			await rename(tempPath, destination);
+			return;
+		} catch (error) {
+			lastError = error;
+			if (!isRetryableRenameError(error) || attempt === RENAME_MAX_ATTEMPTS) {
+				break;
+			}
+			getKanbanRuntimeLogger().debug("locked-fs.rename.retry", {
+				destination,
+				attempt,
+				code: (error as { code?: string }).code,
+			});
+			await delay(RENAME_BASE_DELAY_MS * attempt);
+		}
+	}
+
+	if (isRetryableRenameError(lastError)) {
+		// The destination stayed locked for the whole retry window. Fall back to a
+		// non-atomic overwrite: reading the temp file and writing the destination
+		// in place avoids the rename lock while still applying the new content.
+		try {
+			const content = await readFile(tempPath, "utf8");
+			await writeFile(destination, content, "utf8");
+			getKanbanRuntimeLogger().debug("locked-fs.rename.fallback-overwrite", { destination });
+			await rm(tempPath, { force: true });
+			return;
+		} catch (fallbackError) {
+			await rm(tempPath, { force: true }).catch(() => {});
+			throw fallbackError;
+		}
+	}
+
+	await rm(tempPath, { force: true }).catch(() => {});
+	throw lastError;
+}
+
 interface CompromisedLockErrorShape {
 	code?: unknown;
 	syscall?: unknown;
@@ -183,7 +255,7 @@ export class LockedFileSystem {
 			await mkdir(dirname(path), { recursive: true });
 			const tempPath = `${path}.tmp.${process.pid}.${Date.now()}.${randomUUID()}`;
 			await writeFile(tempPath, content, "utf8");
-			await rename(tempPath, path);
+			await renameWithRetry(tempPath, path);
 			if (options.executable) {
 				await chmod(path, 0o755);
 			}

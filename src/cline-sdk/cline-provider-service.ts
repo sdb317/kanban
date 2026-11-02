@@ -51,6 +51,36 @@ import {
 
 const WORKOS_TOKEN_PREFIX = "workos:";
 const DEFAULT_CLINE_API_BASE_URL = "https://api.cline.bot";
+
+// Kanban forces the native Cline agent onto a local Ollama model instead of
+// Cline's cloud service. Ollama is a first-class built-in provider in
+// @clinebot/llms (provider id "ollama"); it is configured generically with a
+// base URL + local model name and needs no API key. The local Ollama server
+// listens on http://localhost:11434 by default (see docs.ollama.com/api).
+//
+// The defaults below can be overridden via environment variables so operators
+// can point at a remote Ollama host or pick whichever model they have pulled
+// locally (e.g. `ollama pull qwen3`), without code changes:
+//   KANBAN_CLINE_OLLAMA=0            -> disable forcing, use the selected provider
+//   KANBAN_CLINE_OLLAMA_MODEL=...    -> local Ollama model name/tag
+//   KANBAN_CLINE_OLLAMA_BASE_URL=... -> Ollama server URL
+const OLLAMA_PROVIDER_ID = "ollama";
+const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+const DEFAULT_OLLAMA_MODEL_ID = "gemma4:e4b";
+
+function isForcedOllamaEnabled(): boolean {
+	const raw = process.env.KANBAN_CLINE_OLLAMA?.trim().toLowerCase();
+	// Enabled by default; only an explicit opt-out disables it.
+	return raw !== "0" && raw !== "false" && raw !== "off" && raw !== "no";
+}
+
+function resolveForcedOllamaBaseUrl(): string {
+	return process.env.KANBAN_CLINE_OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL;
+}
+
+function resolveForcedOllamaModelId(explicitOverride?: string): string {
+	return explicitOverride?.trim() || process.env.KANBAN_CLINE_OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL_ID;
+}
 const MANAGED_PROVIDER_ENV_KEYS: Record<ManagedClineOauthProviderId, readonly string[]> = {
 	cline: ["CLINE_API_KEY"],
 	oca: ["OCA_API_KEY"],
@@ -784,6 +814,24 @@ export function createClineProviderService() {
 			modelIdOverride?: string;
 			reasoningEffortOverride?: RuntimeClineReasoningEffort | null;
 		}): Promise<ResolvedClineLaunchConfig> {
+			// Force the native Cline agent onto a local Ollama model rather than
+			// Cline's cloud service. This mirrors what `ollama launch cline` does:
+			// provider -> ollama, base URL -> local Ollama endpoint, model -> a
+			// locally pulled model. Ollama needs no API key. A caller-provided
+			// modelId override (e.g. a per-task model) still wins over the default.
+			if (isForcedOllamaEnabled()) {
+				return {
+					providerId: OLLAMA_PROVIDER_ID,
+					modelId: resolveForcedOllamaModelId(overrides?.modelIdOverride),
+					apiKey: null,
+					baseUrl: resolveForcedOllamaBaseUrl(),
+					reasoningEffort:
+						overrides && "reasoningEffortOverride" in overrides
+							? (overrides.reasoningEffortOverride ?? null)
+							: undefined,
+				};
+			}
+
 			const selectedSettings = overrides?.providerIdOverride
 				? (getSdkProviderSettings(overrides.providerIdOverride) ?? getSelectedProviderSettings())
 				: getSelectedProviderSettings();
