@@ -4,26 +4,26 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRuntimeClineProviderSettings } from "@/runtime/native-agent";
 import {
-	addClineProvider,
-	completeClineDeviceAuth,
-	fetchClineProviderCatalog,
-	fetchClineProviderModels,
-	runClineProviderOauthLogin,
-	saveClineProviderSettings,
-	startClineDeviceAuth,
-	updateClineProvider,
+    addClineProvider,
+    completeClineDeviceAuth,
+    fetchClineProviderCatalog,
+    fetchClineProviderModels,
+    runClineProviderOauthLogin,
+    saveClineProviderSettings,
+    startClineDeviceAuth,
+    updateClineProvider,
 } from "@/runtime/runtime-config-query";
 import type {
-	RuntimeAgentId,
-	RuntimeClineOauthLoginResponse,
-	RuntimeClineOauthProvider,
-	RuntimeClineProviderCapability,
-	RuntimeClineProviderCatalogItem,
-	RuntimeClineProviderModel,
-	RuntimeClineProviderSettings,
-	RuntimeClineReasoningEffort,
-	RuntimeConfigResponse,
-	RuntimeTaskClineSettings,
+    RuntimeAgentId,
+    RuntimeClineOauthLoginResponse,
+    RuntimeClineOauthProvider,
+    RuntimeClineProviderCapability,
+    RuntimeClineProviderCatalogItem,
+    RuntimeClineProviderModel,
+    RuntimeClineProviderSettings,
+    RuntimeClineReasoningEffort,
+    RuntimeConfigResponse,
+    RuntimeTaskClineSettings,
 } from "@/runtime/types";
 import { isLocalhostAccess } from "@/utils/localhost-detection";
 
@@ -402,8 +402,12 @@ export function useRuntimeSettingsClineController(
 		if (providerId.trim().length > 0) {
 			return;
 		}
+		// The runtime marks the default provider as enabled (Ollama in Ollama mode, otherwise Cline).
 		const defaultProvider =
-			providerCatalog.find((provider) => provider.id.trim().toLowerCase() === "cline") ?? providerCatalog[0] ?? null;
+			providerCatalog.find((provider) => provider.enabled) ??
+			providerCatalog.find((provider) => provider.id.trim().toLowerCase() === "cline") ??
+			providerCatalog[0] ??
+			null;
 		if (!defaultProvider) {
 			return;
 		}

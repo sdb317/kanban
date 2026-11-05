@@ -52,34 +52,112 @@ import {
 const WORKOS_TOKEN_PREFIX = "workos:";
 const DEFAULT_CLINE_API_BASE_URL = "https://api.cline.bot";
 
-// Kanban forces the native Cline agent onto a local Ollama model instead of
-// Cline's cloud service. Ollama is a first-class built-in provider in
-// @clinebot/llms (provider id "ollama"); it is configured generically with a
-// base URL + local model name and needs no API key. The local Ollama server
-// listens on http://localhost:11434 by default (see docs.ollama.com/api).
+// Kanban offers a local Ollama server as the default provider for the native
+// Cline agent, with Cline's cloud provider as the only alternative. Ollama is a
+// built-in provider in @clinebot/llms (provider id "ollama") in the
+// "openai-compatible" family, so the SDK appends OpenAI-style paths like
+// "/chat/completions" to the configured base URL. Ollama serves that API under
+// a "/v1" prefix (the SDK's own default is "http://localhost:11434/v1"); without
+// it Ollama answers "404 page not found". Ollama needs no API key.
 //
-// The defaults below can be overridden via environment variables so operators
-// can point at a remote Ollama host or pick whichever model they have pulled
-// locally (e.g. `ollama pull qwen3`), without code changes:
-//   KANBAN_CLINE_OLLAMA=0            -> disable forcing, use the selected provider
-//   KANBAN_CLINE_OLLAMA_MODEL=...    -> local Ollama model name/tag
-//   KANBAN_CLINE_OLLAMA_BASE_URL=... -> Ollama server URL
+// Ollama models are never taken from a static catalog: they are listed by
+// querying the Ollama server's native "/api/tags" endpoint on every request, so
+// the picker always reflects what is pulled locally.
+//
+// Environment overrides:
+//   KANBAN_CLINE_OLLAMA=0            -> disable Ollama mode (full SDK catalog, Cline default)
+//   KANBAN_CLINE_OLLAMA_MODEL=...    -> preferred Ollama model name/tag
+//   KANBAN_CLINE_OLLAMA_BASE_URL=... -> Ollama server URL ("/v1" added if omitted)
 const OLLAMA_PROVIDER_ID = "ollama";
-const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
-const DEFAULT_OLLAMA_MODEL_ID = "gemma4:e4b";
+const OLLAMA_PROVIDER_NAME = "Ollama";
+const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
+const DEFAULT_OLLAMA_MODEL_ID = "";
+const OLLAMA_MODEL_LIST_TIMEOUT_MS = 2_500;
+const OLLAMA_TAGS_RESPONSE_SCHEMA = z.object({
+	models: z.array(z.object({ name: z.string().optional(), model: z.string().optional() }).passthrough()).optional(),
+});
 
-function isForcedOllamaEnabled(): boolean {
+function isOllamaModeEnabled(): boolean {
 	const raw = process.env.KANBAN_CLINE_OLLAMA?.trim().toLowerCase();
 	// Enabled by default; only an explicit opt-out disables it.
 	return raw !== "0" && raw !== "false" && raw !== "off" && raw !== "no";
 }
 
-function resolveForcedOllamaBaseUrl(): string {
-	return process.env.KANBAN_CLINE_OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL;
+// Ensure the Ollama base URL carries the OpenAI-compatible "/v1" prefix the SDK
+// expects, so a bare host like "http://remote-host:11434" still works.
+function normalizeOllamaBaseUrl(baseUrl: string): string {
+	const trimmed = baseUrl.trim().replace(/\/+$/, "");
+	if (!trimmed) {
+		return DEFAULT_OLLAMA_BASE_URL;
+	}
+	return /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
-function resolveForcedOllamaModelId(explicitOverride?: string): string {
-	return explicitOverride?.trim() || process.env.KANBAN_CLINE_OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL_ID;
+// Resolve the Ollama base URL: saved provider setting, then env, then default.
+function resolveOllamaBaseUrl(savedBaseUrl?: string | null): string {
+	return normalizeOllamaBaseUrl(
+		savedBaseUrl?.trim() || process.env.KANBAN_CLINE_OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL,
+	);
+}
+
+// The native Ollama API (e.g. "/api/tags") lives at the server root, not under "/v1".
+function toOllamaServerRoot(baseUrl: string): string {
+	return normalizeOllamaBaseUrl(baseUrl).replace(/\/v\d+$/, "");
+}
+
+// Query the Ollama server for locally available models. Returns an empty list
+// when the server is unreachable or responds unexpectedly.
+async function fetchOllamaModels(baseUrl: string): Promise<RuntimeClineProviderModel[]> {
+	const url = `${toOllamaServerRoot(baseUrl)}/api/tags`;
+	try {
+		const response = await globalThis.fetch(url, {
+			method: "GET",
+			signal: AbortSignal.timeout(OLLAMA_MODEL_LIST_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			LOGGER.log("Ollama model list request returned an unsuccessful response.", {
+				severity: "warn",
+				providerId: OLLAMA_PROVIDER_ID,
+				url,
+				status: response.status,
+			});
+			return [];
+		}
+		const parsed = OLLAMA_TAGS_RESPONSE_SCHEMA.safeParse((await response.json()) as unknown);
+		if (!parsed.success) {
+			LOGGER.log("Ollama model list request returned an unexpected response.", {
+				severity: "warn",
+				providerId: OLLAMA_PROVIDER_ID,
+				url,
+			});
+			return [];
+		}
+		const modelIds = (parsed.data.models ?? [])
+			.map((model) => (model.name ?? model.model ?? "").trim())
+			.filter((modelId) => modelId.length > 0);
+		return [...new Set(modelIds)]
+			.sort((left, right) => left.localeCompare(right))
+			.map((id) => ({ id, name: id }));
+	} catch (error) {
+		LOGGER.log("Ollama model list request failed.", {
+			severity: "warn",
+			providerId: OLLAMA_PROVIDER_ID,
+			url,
+			errorMessage: toErrorMessage(error),
+		});
+		return [];
+	}
+}
+
+// Pick the Ollama model to use when none is explicitly chosen: the saved or
+// env-preferred model if Ollama still has it, otherwise the first available one.
+function pickDefaultOllamaModelId(models: RuntimeClineProviderModel[], preferredModelId?: string | null): string {
+	const preferred =
+		preferredModelId?.trim() || process.env.KANBAN_CLINE_OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL_ID;
+	if (preferred && (models.length === 0 || models.some((model) => model.id === preferred))) {
+		return preferred;
+	}
+	return models[0]?.id ?? "";
 }
 const MANAGED_PROVIDER_ENV_KEYS: Record<ManagedClineOauthProviderId, readonly string[]> = {
 	cline: ["CLINE_API_KEY"],
@@ -380,15 +458,30 @@ function toProviderSettingsSummary(settings: SdkProviderSettings | null): Runtim
 	};
 }
 
+// In Ollama mode Ollama is always the default provider; Cline is available as an
+// explicit alternative (e.g. a per-task provider override).
 function getSelectedProviderSettings(): SdkProviderSettings | null {
+	if (isOllamaModeEnabled()) {
+		return getSdkProviderSettings(OLLAMA_PROVIDER_ID) ?? { provider: OLLAMA_PROVIDER_ID };
+	}
 	const lastUsedSettings = getLastUsedSdkProviderSettings();
-	const resolvedProviderId = lastUsedSettings?.provider?.trim().toLowerCase() || SDK_DEFAULT_PROVIDER_ID;
+	const lastUsedProviderId = lastUsedSettings?.provider?.trim().toLowerCase() ?? "";
+	const resolvedProviderId = lastUsedProviderId || SDK_DEFAULT_PROVIDER_ID;
 	return (
 		getSdkProviderSettings(resolvedProviderId) ??
 		lastUsedSettings ?? {
 			provider: resolvedProviderId,
 		}
 	);
+}
+
+// Settings used for Cline account features (profile, balance, orgs, ...). In
+// Ollama mode Cline is never the default provider, so read its settings directly.
+function getClineAccountSettings(): SdkProviderSettings | null {
+	if (isOllamaModeEnabled()) {
+		return getSdkProviderSettings(SDK_DEFAULT_PROVIDER_ID);
+	}
+	return getSelectedProviderSettings();
 }
 
 async function resolveDefaultModelIdForProvider(providerId: string): Promise<string | null> {
@@ -476,10 +569,13 @@ async function refreshManagedOauthSettings(
 	};
 
 	if (!authSettingsEqual(settings.auth, nextSettings.auth)) {
+		// A token refresh must not change which provider is the default; only
+		// keep it last-used if it already was.
+		const wasLastUsed = getLastUsedSdkProviderSettings()?.provider?.trim().toLowerCase() === providerId;
 		saveSdkProviderSettings({
 			settings: nextSettings,
 			tokenSource: "oauth",
-			setLastUsed: true,
+			setLastUsed: wasLastUsed,
 		});
 	}
 
@@ -525,7 +621,7 @@ export function createClineProviderService() {
 
 		async getClineAccountProfile(): Promise<RuntimeClineAccountProfileResponse> {
 			try {
-				const selectedSettings = getSelectedProviderSettings();
+				const selectedSettings = getClineAccountSettings();
 				if (!selectedSettings) {
 					return {
 						profile: null,
@@ -583,7 +679,7 @@ export function createClineProviderService() {
 
 		async getClineKanbanAccess(): Promise<RuntimeClineKanbanAccessResponse> {
 			try {
-				const selectedSettings = getSelectedProviderSettings();
+				const selectedSettings = getClineAccountSettings();
 				if (!selectedSettings) {
 					return { enabled: true };
 				}
@@ -621,7 +717,7 @@ export function createClineProviderService() {
 		},
 
 		async getFeaturebaseToken(): Promise<{ featurebaseJwt: string }> {
-			const selectedSettings = getSelectedProviderSettings();
+			const selectedSettings = getClineAccountSettings();
 			if (!selectedSettings) {
 				throw new Error("No provider settings configured.");
 			}
@@ -657,7 +753,7 @@ export function createClineProviderService() {
 
 		async getClineAccountBalance(): Promise<RuntimeClineAccountBalanceResponse> {
 			try {
-				const selectedSettings = getSelectedProviderSettings();
+				const selectedSettings = getClineAccountSettings();
 				if (!selectedSettings) {
 					return { balance: null, activeAccountLabel: null, activeOrganizationId: null };
 				}
@@ -720,7 +816,7 @@ export function createClineProviderService() {
 
 		async getClineAccountOrganizations(): Promise<RuntimeClineAccountOrganizationsResponse> {
 			try {
-				const selectedSettings = getSelectedProviderSettings();
+				const selectedSettings = getClineAccountSettings();
 				if (!selectedSettings) {
 					return { organizations: [] };
 				}
@@ -771,7 +867,7 @@ export function createClineProviderService() {
 
 		async switchClineAccount(organizationId: string | null): Promise<RuntimeClineAccountSwitchResponse> {
 			try {
-				const selectedSettings = getSelectedProviderSettings();
+				const selectedSettings = getClineAccountSettings();
 				if (!selectedSettings) {
 					return { ok: false, error: "No provider settings configured." };
 				}
@@ -814,17 +910,29 @@ export function createClineProviderService() {
 			modelIdOverride?: string;
 			reasoningEffortOverride?: RuntimeClineReasoningEffort | null;
 		}): Promise<ResolvedClineLaunchConfig> {
-			// Force the native Cline agent onto a local Ollama model rather than
-			// Cline's cloud service. This mirrors what `ollama launch cline` does:
-			// provider -> ollama, base URL -> local Ollama endpoint, model -> a
-			// locally pulled model. Ollama needs no API key. A caller-provided
-			// modelId override (e.g. a per-task model) still wins over the default.
-			if (isForcedOllamaEnabled()) {
+			const overrideProviderId = overrides?.providerIdOverride?.trim().toLowerCase() ?? "";
+			const effectiveProviderId =
+				overrideProviderId || (getSelectedProviderSettings()?.provider.trim().toLowerCase() ?? "");
+
+			// Local Ollama: no API key; model is the per-task override, else the
+			// saved/preferred model if still pulled, else the first model Ollama reports.
+			if (isOllamaModeEnabled() && effectiveProviderId === OLLAMA_PROVIDER_ID) {
+				const savedSettings = getSdkProviderSettings(OLLAMA_PROVIDER_ID);
+				const baseUrl = resolveOllamaBaseUrl(savedSettings?.baseUrl);
+				let modelId = overrides?.modelIdOverride?.trim() || "";
+				if (!modelId) {
+					modelId = pickDefaultOllamaModelId(await fetchOllamaModels(baseUrl), savedSettings?.model);
+				}
+				if (!modelId) {
+					throw new Error(
+						`No Ollama models are available at ${toOllamaServerRoot(baseUrl)}. Start Ollama and pull a model (e.g. \`ollama pull gemma4:e4b\`), then start the task again.`,
+					);
+				}
 				return {
 					providerId: OLLAMA_PROVIDER_ID,
-					modelId: resolveForcedOllamaModelId(overrides?.modelIdOverride),
+					modelId,
 					apiKey: null,
-					baseUrl: resolveForcedOllamaBaseUrl(),
+					baseUrl,
 					reasoningEffort:
 						overrides && "reasoningEffortOverride" in overrides
 							? (overrides.reasoningEffortOverride ?? null)
@@ -832,8 +940,8 @@ export function createClineProviderService() {
 				};
 			}
 
-			const selectedSettings = overrides?.providerIdOverride
-				? (getSdkProviderSettings(overrides.providerIdOverride) ?? getSelectedProviderSettings())
+			const selectedSettings = overrideProviderId
+				? (getSdkProviderSettings(overrideProviderId) ?? { provider: overrideProviderId })
 				: getSelectedProviderSettings();
 			if (!selectedSettings) {
 				throw new Error(
@@ -873,6 +981,42 @@ export function createClineProviderService() {
 		},
 
 		async getProviderCatalog(): Promise<RuntimeClineProviderCatalogResponse> {
+			// Ollama mode: offer exactly two providers, Ollama (default, first) and
+			// Cline. Ollama's default model comes from querying the Ollama server.
+			if (isOllamaModeEnabled()) {
+				const selectedId = getProviderSettingsSummary().providerId?.trim().toLowerCase() || OLLAMA_PROVIDER_ID;
+				const savedOllamaSettings = getSdkProviderSettings(OLLAMA_PROVIDER_ID);
+				const ollamaBaseUrl = resolveOllamaBaseUrl(savedOllamaSettings?.baseUrl);
+				const ollamaModels = await fetchOllamaModels(ollamaBaseUrl);
+				const sdkCline = await listSdkProviderCatalog()
+					.then((sdkProviders) => sdkProviders.find((provider) => provider.id === SDK_DEFAULT_PROVIDER_ID))
+					.catch(() => undefined);
+				return {
+					providers: [
+						{
+							id: OLLAMA_PROVIDER_ID,
+							name: OLLAMA_PROVIDER_NAME,
+							oauthSupported: false,
+							enabled: selectedId === OLLAMA_PROVIDER_ID,
+							defaultModelId: pickDefaultOllamaModelId(ollamaModels, savedOllamaSettings?.model) || null,
+							baseUrl: ollamaBaseUrl,
+							supportsBaseUrl: true,
+							env: undefined,
+						},
+						{
+							id: SDK_DEFAULT_PROVIDER_ID,
+							name: sdkCline?.name ?? "Cline",
+							oauthSupported: true,
+							enabled: selectedId === SDK_DEFAULT_PROVIDER_ID,
+							defaultModelId: sdkCline?.defaultModelId ?? SDK_DEFAULT_MODEL_ID,
+							baseUrl: sdkCline?.baseUrl?.trim() || null,
+							supportsBaseUrl: (sdkCline?.baseUrl?.trim().length ?? 0) > 0,
+							env: sdkCline?.env,
+						},
+					],
+				};
+			}
+
 			const selectedProviderId = getProviderSettingsSummary().providerId?.trim().toLowerCase() ?? "";
 			const providers: RuntimeClineProviderCatalogItem[] = await listSdkProviderCatalog()
 				.then((sdkProviders) =>
@@ -920,6 +1064,14 @@ export function createClineProviderService() {
 
 		async getProviderModels(providerId: string): Promise<RuntimeClineProviderModelsResponse> {
 			const normalizedProviderId = providerId.trim().toLowerCase();
+			// Ollama models come only from querying the Ollama server, on every call.
+			if (normalizedProviderId === OLLAMA_PROVIDER_ID) {
+				const savedOllamaSettings = getSdkProviderSettings(OLLAMA_PROVIDER_ID);
+				return {
+					providerId: normalizedProviderId,
+					models: await fetchOllamaModels(resolveOllamaBaseUrl(savedOllamaSettings?.baseUrl)),
+				};
+			}
 			let providerModels =
 				normalizedProviderId.length > 0
 					? await listSdkProviderModels(normalizedProviderId)
