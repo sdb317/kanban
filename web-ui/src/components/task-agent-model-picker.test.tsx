@@ -1,13 +1,13 @@
-import { act, useEffect } from "react";
+import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { UseTaskAgentModelPickerResult } from "@/components/task-agent-model-picker";
 import type {
-	RuntimeAgentId,
-	RuntimeClineProviderCatalogItem,
-	RuntimeClineProviderModel,
-	RuntimeTaskClineSettings,
+    RuntimeAgentId,
+    RuntimeClineProviderCatalogItem,
+    RuntimeClineProviderModel,
+    RuntimeTaskClineSettings,
 } from "@/runtime/types";
 
 const fetchClineProviderCatalogMock = vi.hoisted(() => vi.fn());
@@ -40,8 +40,12 @@ function createTaskClineSettings(settings?: RuntimeTaskClineSettings): RuntimeTa
 
 let container: HTMLDivElement;
 let root: Root;
+let previousActEnvironment: boolean | undefined;
 
 beforeEach(() => {
+	previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+		.IS_REACT_ACT_ENVIRONMENT;
+	(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	root = createRoot(container);
@@ -50,7 +54,14 @@ beforeEach(() => {
 afterEach(() => {
 	act(() => root.unmount());
 	container.remove();
+	document.body.innerHTML = "";
 	vi.restoreAllMocks();
+	if (previousActEnvironment === undefined) {
+		delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+	} else {
+		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+			previousActEnvironment;
+	}
 });
 
 describe("useTaskAgentModelPicker – clineProviderOptions", () => {
@@ -761,5 +772,165 @@ describe("TaskAgentModelPicker – inherited default reasoning effort", () => {
 
 		expect(container.textContent).toContain("GPT-5.3 Codex");
 		expect(container.textContent).not.toContain("GPT-5.3 Codex (High)");
+	});
+});
+
+describe("TaskAgentModelPicker – Ollama model selection", () => {
+	// A controlled harness that mirrors App.tsx: it owns clineSettings state and
+	// feeds every onClineSettingsChange back into the picker. This is required to
+	// exercise the auto-reset effect, which reacts to the stored modelId.
+	function OllamaPickerHarness({
+		onSettings,
+		clineModelOptions,
+		providerModels,
+		initialSettings,
+	}: {
+		onSettings: (next: RuntimeTaskClineSettings | undefined) => void;
+		clineModelOptions: Array<{ value: string; label: string }>;
+		providerModels: RuntimeClineProviderModel[];
+		initialSettings: RuntimeTaskClineSettings | undefined;
+	}) {
+		const [clineSettings, setClineSettings] = useState<RuntimeTaskClineSettings | undefined>(initialSettings);
+		const { TaskAgentModelPicker } = TaskAgentModelPickerModule;
+		return (
+			<TaskAgentModelPicker
+				agentId={"cline" as RuntimeAgentId}
+				onAgentIdChange={() => {}}
+				clineSettings={clineSettings}
+				onClineSettingsChange={(next) => {
+					setClineSettings(next);
+					onSettings(next);
+				}}
+				agentOptions={[{ value: "", label: "Cline" }]}
+				clineProviderOptions={[
+					{ value: "", label: "Ollama" },
+					{ value: "cline", label: "Cline" },
+				]}
+				clineModelOptions={clineModelOptions}
+				effectiveDefaultModelId="gemma4:e4b"
+				providerModels={providerModels}
+				isLoadingProviders={false}
+				isLoadingModels={false}
+				defaultAgentId={"cline" as RuntimeAgentId}
+				defaultProviderId="ollama"
+				providerDefaultModels={{ ollama: "gemma4:e4b" }}
+			/>
+		);
+	}
+
+	let TaskAgentModelPickerModule: typeof import("@/components/task-agent-model-picker");
+
+	beforeEach(async () => {
+		TaskAgentModelPickerModule = await import("@/components/task-agent-model-picker");
+	});
+
+	// Options list intentionally omits the provider's default model (gemma4:e4b);
+	// it is represented by the "" placeholder.
+	const clineModelOptions = [
+		{ value: "", label: "gemma4:e4b" },
+		{ value: "llama3.3:70b", label: "llama3.3:70b" },
+		{ value: "qwen2.5-coder:32b", label: "qwen2.5-coder:32b" },
+	];
+	const providerModels = [
+		{ id: "gemma4:e4b", name: "gemma4:e4b" },
+		{ id: "llama3.3:70b", name: "llama3.3:70b" },
+		{ id: "qwen2.5-coder:32b", name: "qwen2.5-coder:32b" },
+	];
+
+	async function openModelPicker() {
+		const settingsTrigger = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("Override Agent Settings"),
+		);
+		expect(settingsTrigger).not.toBeUndefined();
+		await act(async () => {
+			(settingsTrigger as HTMLButtonElement).click();
+		});
+		const modelTrigger = document.getElementById("cline-chat-model-picker");
+		expect(modelTrigger).not.toBeNull();
+		await act(async () => {
+			(modelTrigger as HTMLElement).click();
+		});
+	}
+
+	// Select a model via the search box + Enter key. This mirrors keyboard use and
+	// avoids the jsdom quirk where a pointer click that closes one Radix popover
+	// can bubble to another popover's trigger (which never happens in a browser).
+	async function selectModelByTyping(query: string) {
+		const modelSearchInput = document.querySelector(
+			'input[placeholder="Search models..."]',
+		) as HTMLInputElement | null;
+		expect(modelSearchInput, "model search input should be present").not.toBeNull();
+		await act(async () => {
+			const input = modelSearchInput as HTMLInputElement;
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			setter?.call(input, query);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			(modelSearchInput as HTMLInputElement).dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+			);
+		});
+	}
+
+	// Reproduces the reported bug: with Ollama as the provider and its default
+	// model (gemma4:e4b) stored in modelId, selecting a different model must stick.
+	// Previously, choosing a model that does not support reasoning effort fired a
+	// second settings update (clearing reasoning effort) that read the stale
+	// render-time settings and reverted modelId back to the provider default.
+	it("keeps a non-default Ollama model selected after choosing it", async () => {
+		const settingsCalls: Array<RuntimeTaskClineSettings | undefined> = [];
+
+		await act(async () =>
+			root.render(
+				<OllamaPickerHarness
+					onSettings={(next) => settingsCalls.push(next)}
+					clineModelOptions={clineModelOptions}
+					providerModels={providerModels}
+					// Simulate selecting the Ollama provider, which stores its default model id.
+					initialSettings={{ providerId: "ollama", modelId: "gemma4:e4b" }}
+				/>,
+			),
+		);
+
+		// Let the auto-reset effect settle after the initial render.
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		settingsCalls.length = 0;
+		await openModelPicker();
+		await selectModelByTyping("qwen2.5-coder:32b");
+
+		// Let any follow-up effects run.
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		expect(settingsCalls.at(-1)).toEqual({ providerId: "ollama", modelId: "qwen2.5-coder:32b" });
+	});
+
+	// Storing the provider default model id must not be auto-reset to a different
+	// model just because the default is absent from the explicit options list.
+	it("does not auto-reset when modelId equals the provider default model", async () => {
+		const settingsCalls: Array<RuntimeTaskClineSettings | undefined> = [];
+
+		await act(async () =>
+			root.render(
+				<OllamaPickerHarness
+					onSettings={(next) => settingsCalls.push(next)}
+					clineModelOptions={clineModelOptions}
+					providerModels={providerModels}
+					initialSettings={{ providerId: "ollama", modelId: "gemma4:e4b" }}
+				/>,
+			),
+		);
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		// The auto-reset effect must not have rewritten the stored default model.
+		expect(settingsCalls.some((call) => call?.modelId && call.modelId !== "gemma4:e4b")).toBe(false);
 	});
 });

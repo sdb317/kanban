@@ -4,49 +4,49 @@
 
 import { z } from "zod";
 import type {
-	RuntimeClineAccountBalanceResponse,
-	RuntimeClineAccountOrganizationsResponse,
-	RuntimeClineAccountProfileResponse,
-	RuntimeClineAccountSwitchResponse,
-	RuntimeClineDeviceAuthCompleteResponse,
-	RuntimeClineDeviceAuthStartResponse,
-	RuntimeClineKanbanAccessResponse,
-	RuntimeClineOauthLoginResponse,
-	RuntimeClineProviderCatalogItem,
-	RuntimeClineProviderCatalogResponse,
-	RuntimeClineProviderModel,
-	RuntimeClineProviderModelsResponse,
-	RuntimeClineProviderSettings,
-	RuntimeClineProviderSettingsSaveResponse,
-	RuntimeClineReasoningEffort,
+    RuntimeClineAccountBalanceResponse,
+    RuntimeClineAccountOrganizationsResponse,
+    RuntimeClineAccountProfileResponse,
+    RuntimeClineAccountSwitchResponse,
+    RuntimeClineDeviceAuthCompleteResponse,
+    RuntimeClineDeviceAuthStartResponse,
+    RuntimeClineKanbanAccessResponse,
+    RuntimeClineOauthLoginResponse,
+    RuntimeClineProviderCatalogItem,
+    RuntimeClineProviderCatalogResponse,
+    RuntimeClineProviderModel,
+    RuntimeClineProviderModelsResponse,
+    RuntimeClineProviderSettings,
+    RuntimeClineProviderSettingsSaveResponse,
+    RuntimeClineReasoningEffort,
 } from "../core/api-contract";
 import { openInBrowser } from "../server/browser";
 import { createKanbanClineLogger } from "./cline-runtime-logger";
 import {
-	addSdkCustomProvider,
-	completeClineDeviceAuth as completeSdkDeviceAuth,
-	deleteSdkCustomProvider,
-	fetchSdkClineAccountBalance,
-	fetchSdkClineAccountProfile,
-	fetchSdkClineUserRemoteConfig,
-	fetchSdkFeaturebaseToken,
-	fetchSdkOrganizationBalance,
-	fetchSdkOrgData,
-	getLastUsedSdkProviderSettings,
-	getSdkProviderSettings,
-	listSdkProviderCatalog,
-	listSdkProviderModels,
-	loginManagedOauthProvider,
-	type ManagedClineOauthProviderId,
-	refreshManagedOauthCredentials,
-	SDK_DEFAULT_MODEL_ID,
-	SDK_DEFAULT_PROVIDER_ID,
-	type SdkCustomProviderCapability,
-	type SdkProviderSettings,
-	saveSdkProviderSettings,
-	startClineDeviceAuth as startSdkDeviceAuth,
-	switchSdkClineAccount,
-	updateSdkCustomProvider,
+    addSdkCustomProvider,
+    completeClineDeviceAuth as completeSdkDeviceAuth,
+    deleteSdkCustomProvider,
+    fetchSdkClineAccountBalance,
+    fetchSdkClineAccountProfile,
+    fetchSdkClineUserRemoteConfig,
+    fetchSdkFeaturebaseToken,
+    fetchSdkOrganizationBalance,
+    fetchSdkOrgData,
+    getLastUsedSdkProviderSettings,
+    getSdkProviderSettings,
+    listSdkProviderCatalog,
+    listSdkProviderModels,
+    loginManagedOauthProvider,
+    type ManagedClineOauthProviderId,
+    refreshManagedOauthCredentials,
+    SDK_DEFAULT_MODEL_ID,
+    SDK_DEFAULT_PROVIDER_ID,
+    type SdkCustomProviderCapability,
+    type SdkProviderSettings,
+    saveSdkProviderSettings,
+    startClineDeviceAuth as startSdkDeviceAuth,
+    switchSdkClineAccount,
+    updateSdkCustomProvider,
 } from "./sdk-provider-boundary";
 
 const WORKOS_TOKEN_PREFIX = "workos:";
@@ -71,7 +71,7 @@ const DEFAULT_CLINE_API_BASE_URL = "https://api.cline.bot";
 const OLLAMA_PROVIDER_ID = "ollama";
 const OLLAMA_PROVIDER_NAME = "Ollama";
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
-const DEFAULT_OLLAMA_MODEL_ID = "";
+const DEFAULT_OLLAMA_MODEL_ID = "gemma4:12b";
 const OLLAMA_MODEL_LIST_TIMEOUT_MS = 2_500;
 const OLLAMA_TAGS_RESPONSE_SCHEMA = z.object({
 	models: z.array(z.object({ name: z.string().optional(), model: z.string().optional() }).passthrough()).optional(),
@@ -925,7 +925,7 @@ export function createClineProviderService() {
 				}
 				if (!modelId) {
 					throw new Error(
-						`No Ollama models are available at ${toOllamaServerRoot(baseUrl)}. Start Ollama and pull a model (e.g. \`ollama pull gemma4:e4b\`), then start the task again.`,
+						`No Ollama models are available at ${toOllamaServerRoot(baseUrl)}. Start Ollama and pull a model (e.g. \`ollama pull gemma4:12b\`), then start the task again.`,
 					);
 				}
 				return {

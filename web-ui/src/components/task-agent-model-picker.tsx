@@ -2,24 +2,24 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { getRuntimeLaunchSupportedAgentCatalog } from "@runtime-agent-catalog";
 import { ChevronDown } from "lucide-react";
 import type { ReactElement } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ClineChatModelSelector } from "@/components/detail-panels/cline-chat-model-selector";
 import {
-	buildClineAgentModelPickerOptions,
-	buildClineSelectedModelButtonText,
-	getClineReasoningEnabledModelIds,
+    buildClineAgentModelPickerOptions,
+    buildClineSelectedModelButtonText,
+    getClineReasoningEnabledModelIds,
 } from "@/components/detail-panels/cline-model-picker-options";
 import { SearchSelectDropdown } from "@/components/search-select-dropdown";
 import { cn } from "@/components/ui/cn";
 import { NativeSelect } from "@/components/ui/native-select";
 import { fetchClineProviderCatalog, fetchClineProviderModels } from "@/runtime/runtime-config-query";
 import type {
-	RuntimeAgentId,
-	RuntimeClineProviderCatalogItem,
-	RuntimeClineProviderModel,
-	RuntimeClineReasoningEffort,
-	RuntimeTaskClineSettings,
+    RuntimeAgentId,
+    RuntimeClineProviderCatalogItem,
+    RuntimeClineProviderModel,
+    RuntimeClineReasoningEffort,
+    RuntimeTaskClineSettings,
 } from "@/runtime/types";
 
 // ---------------------------------------------------------------------------
@@ -267,11 +267,22 @@ export function TaskAgentModelPicker({
 	const clineModelId = clineSettings?.modelId;
 	const clineReasoningEffort = clineSettings?.reasoningEffort;
 
+	// Tracks the most recently emitted settings so that several
+	// updateTaskClineSettings() calls fired within the same event handler compose
+	// on top of each other instead of each starting from the stale render-time
+	// prop. Without this, a handler that updates the model and then clears the
+	// reasoning effort would emit the model change and then immediately overwrite
+	// it with the pre-update settings, reverting the selection to the default.
+	const latestClineSettingsRef = useRef<RuntimeTaskClineSettings | undefined>(clineSettings);
+	latestClineSettingsRef.current = clineSettings;
+
 	const updateTaskClineSettings = useCallback(
 		(updater: (current: RuntimeTaskClineSettings | undefined) => RuntimeTaskClineSettings | undefined) => {
-			onClineSettingsChange?.(updater(cloneTaskClineSettings(clineSettings)));
+			const next = updater(cloneTaskClineSettings(latestClineSettingsRef.current));
+			latestClineSettingsRef.current = next;
+			onClineSettingsChange?.(next);
 		},
-		[clineSettings, onClineSettingsChange],
+		[onClineSettingsChange],
 	);
 
 	// Show the Cline provider picker when the effective agent is "cline"
@@ -425,11 +436,21 @@ export function TaskAgentModelPicker({
 	// at that point isLoadingModels is still false (hasn't been set to true
 	// yet by the fetch effect) and the stale/empty options list would
 	// incorrectly clear a valid saved clineModelId.
+	//
+	// Validity is checked against the provider's full model list (providerModels),
+	// not just modelPickerOptions.options. The option list intentionally omits the
+	// provider's default model (it is represented by the "Default" placeholder
+	// whose value is ""), so when a task explicitly stores that default model's id
+	// — e.g. selecting the Ollama provider writes its default model into modelId —
+	// the id is absent from options but is still a real, selectable model. Checking
+	// options alone would wrongly treat it as invalid and reset the user's choice.
 	useEffect(() => {
 		if (isLoadingModels || !clineModelId || modelPickerOptions.options.length <= 1) {
 			return;
 		}
-		const modelExists = modelPickerOptions.options.some((opt) => opt.value === clineModelId);
+		const modelExists =
+			modelPickerOptions.options.some((opt) => opt.value === clineModelId) ||
+			providerModels.some((model) => model.id === clineModelId);
 		if (!modelExists) {
 			const firstRealModel = modelPickerOptions.options.find((opt) => opt.value !== "");
 			updateTaskClineSettings((currentSettings) => {
@@ -445,7 +466,7 @@ export function TaskAgentModelPicker({
 					: undefined;
 			});
 		}
-	}, [clineModelId, isLoadingModels, modelPickerOptions.options, updateTaskClineSettings]);
+	}, [clineModelId, isLoadingModels, modelPickerOptions.options, providerModels, updateTaskClineSettings]);
 
 	return (
 		<div className="flex flex-col gap-2">
