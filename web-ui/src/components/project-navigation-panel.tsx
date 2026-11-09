@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, Ellipsis, ExternalLink, Info, Lightbulb, Plus, 
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { canShowFeaturebaseFeedbackButton } from "@/components/featurebase-feedback-button";
 import { Button } from "@/components/ui/button";
-import { ClineIcon } from "@/components/ui/cline-icon";
+import { KanbanIcon } from "@/components/ui/kanban-icon";
 import { cn } from "@/components/ui/cn";
 import {
 	AlertDialog,
@@ -299,8 +299,9 @@ export function ProjectNavigationPanel({
 			<div style={{ padding: "12px 12px 8px" }}>
 				<div className="flex items-center justify-between">
 					<div className="font-semibold text-base flex items-baseline gap-1.5">
-						<ClineIcon size={18} className="text-text-primary shrink-0 self-center" />
-						Cline <span className="text-text-secondary font-normal text-xs">v{__APP_VERSION__}</span>
+						<KanbanIcon size={18} className="text-text-primary shrink-0 self-center" />
+						Kanban
+						{/* <span className="text-text-secondary font-normal text-xs">v{__APP_VERSION__}</span> */}
 					</div>
 					{isMobile ? (
 						<Button
@@ -557,7 +558,7 @@ function ProjectSupportFooter({
 		if (shouldShowFeaturebaseFeedback) {
 			void featurebaseFeedbackState?.openFeedbackWidget();
 		} else {
-			window.open(GITHUB_ISSUES_URL, "_blank");
+			window.open("mailto:simon.bell@wipo.int?subject=Kanban", "_blank");
 		}
 	};
 
@@ -569,7 +570,7 @@ function ProjectSupportFooter({
 				<Info size={14} className="mt-px shrink-0 text-text-tertiary" />
 				<div className="flex flex-col gap-1.5">
 					<p className="m-0 text-xs text-text-secondary">
-						Kanban is in beta. Help us improve by sharing your experience.
+						Kanban is in development.
 					</p>
 					<button
 						type="button"
