@@ -46,6 +46,7 @@ When enabled, logs go to **both** the console (stdout/stderr via `console.debug/
 $env:CLINE_LOG_ENABLED = "1"
 $env:CLINE_LOG_LEVEL   = "debug"
 $env:CLINE_LOG_PATH    = "$PWD\kanban.log"   # optional; a file, not a folder
+$env:KANBAN_CLINE_OLLAMA_BASE_URL=http://...:11434
 
 npm run build                                 # dogfood runs the built CLI
 npm run dogfood -- --project C:\path\to\real\project
