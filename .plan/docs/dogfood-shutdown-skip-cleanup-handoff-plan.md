@@ -6,7 +6,7 @@ Prevent `Ctrl+C` on dogfood runs from trashing tasks or deleting task worktrees.
 
 ## Confirmed root cause
 
-- `npm run dogfood` often launches a second Kanban runtime.
+- `npm run launch` often launches a second Kanban runtime.
 - Shutdown cleanup marks running and review sessions interrupted, moves cards to trash, and can delete task worktrees.
 - For dogfooding, this shutdown behavior is too destructive.
 
@@ -16,7 +16,7 @@ Use an explicit runtime flag instead of sibling process detection.
 
 - Add CLI option: `--skip-shutdown-cleanup`
 - When set, runtime shutdown skips session interruption persistence and worktree deletion
-- `scripts/dogfood.mjs` always passes this flag when launching `dist/cli.js`
+- `scripts/launch.mjs` always passes this flag when launching `dist/cli.js`
 
 This keeps normal Kanban behavior unchanged, while making dogfood deterministic and safe.
 
@@ -35,7 +35,7 @@ This keeps normal Kanban behavior unchanged, while making dogfood deterministic 
 ## Files changed
 
 - `src/cli.ts`
-- `scripts/dogfood.mjs`
+- `scripts/launch.mjs`
 - `src/server/shutdown-coordinator.ts`
 - `src/terminal/session-manager.ts`
 - `src/terminal/terminal-session-service.ts`

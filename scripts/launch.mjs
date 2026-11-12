@@ -10,16 +10,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const nodeBinary = process.execPath;
 const npmBinary = process.platform === "win32" ? "npm.cmd" : "npm";
-// Dogfood can run multiple wrapper processes at once. Exactly one wrapper should
+// Launch can run multiple wrapper processes at once. Exactly one wrapper should
 // own shutdown cleanup, while all others launch Kanban with
 // --skip-shutdown-cleanup. We elect that owner with an exclusive lock file in
 // the OS temp directory. If the recorded owner PID is no longer alive, the lock
 // is treated as stale and recovered so the next run can become owner.
-const cleanupOwnerLockPath = resolve(tmpdir(), "kanban-dogfood-cleanup-owner.lock");
+const cleanupOwnerLockPath = resolve(tmpdir(), "kanban-launch-cleanup-owner.lock");
 
 function printHelp() {
 	console.log(
-		"Usage: npm run dogfood -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]",
+		"Usage: npm run launch -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]",
 	);
 }
 
@@ -292,8 +292,8 @@ function runRuntimeCommand(command, args, spawnOptions = {}) {
 			...spawnOptions,
 		});
 
-		// Dogfood used to rely on the shell/npm process group behavior, but under
-		// `npm run dogfood` Ctrl+C could reach the runtime twice: once directly
+		// Launch used to rely on the shell/npm process group behavior, but under
+		// `npm run launch` Ctrl+C could reach the runtime twice: once directly
 		// from the terminal group and again through npm wrapper shutdown. That
 		// second SIGINT was enough to make Kanban force-exit before shutdown
 		// cleanup finished, which left in_progress/review cards behind. Running
@@ -369,9 +369,9 @@ function stripNodeModulesBinFromPath(pathValue) {
 	if (typeof pathValue !== "string" || pathValue.length === 0) {
 		return pathValue;
 	}
-	// `npm run dogfood` prepends this repo's node_modules/.bin, which can shadow
+	// `npm run launch` prepends this repo's node_modules/.bin, which can shadow
 	// globally installed agent CLIs (codex/claude/etc) that Kanban should exercise.
-	// This is mostly a dogfood/dev-launch issue; normal installed CLI usage does
+	// This is mostly a normal/dev-launch issue; normal installed CLI usage does
 	// not inject repo-local node_modules/.bin ahead of user PATH entries.
 	return pathValue
 		.split(delimiter)
@@ -386,7 +386,7 @@ function stripNodeModulesBinFromPath(pathValue) {
 		.join(delimiter);
 }
 
-function buildDogfoodRuntimeEnv(baseEnv) {
+function buildLaunchRuntimeEnv(baseEnv) {
 	const runtimeEnv = { ...baseEnv };
 	for (const key of Object.keys(runtimeEnv)) {
 		if (key.toUpperCase() !== "PATH") {
@@ -407,17 +407,17 @@ async function main() {
 			typeof cleanupOwnership.ownerPid === "number"
 				? ` (owner pid ${cleanupOwnership.ownerPid})`
 				: "";
-		console.log(`[dogfood] Cleanup owner already active${ownerPidLabel}; this run will skip shutdown cleanup.`);
+		console.log(`[launch] Cleanup owner already active${ownerPidLabel}; this run will skip shutdown cleanup.`);
 	} else {
 		console.log(
-			`[dogfood] Acquired shutdown cleanup lock at ${cleanupOwnerLockPath} (owner pid ${process.pid}).`,
+			`[launch] Acquired shutdown cleanup lock at ${cleanupOwnerLockPath} (owner pid ${process.pid}).`,
 		);
-		console.log("[dogfood] This run owns shutdown cleanup and will perform it on exit.");
+		console.log("[launch] This run owns shutdown cleanup and will perform it on exit.");
 	}
 
 	try {
 		if (!args.skipBuild) {
-			console.log(`[dogfood] Building checkout at ${repoRoot}`);
+			console.log(`[launch] Building checkout at ${repoRoot}`);
 			const buildCode = await runCommand(npmBinary, ["run", "build"], { cwd: repoRoot, env: process.env });
 			if (buildCode !== 0) {
 				return buildCode;
@@ -432,7 +432,7 @@ async function main() {
 		if (skipShutdownCleanup) {
 			launchArgs.push("--skip-shutdown-cleanup");
 		}
-		// Dogfood defaults to not opening a browser tab; the underlying CLI opens
+		// Launch defaults to not opening a browser tab; the underlying CLI opens
 		// by default, so translate the opt-in into the CLI's negation flag.
 		if (args.open) {
 			launchArgs.push("--open");
@@ -450,18 +450,18 @@ async function main() {
 		}
 		const launchCwd = args.project ?? tmpdir();
 
-		console.log(`[dogfood] Launching ${cliEntrypoint}`);
+		console.log(`[launch] Launching ${cliEntrypoint}`);
 		if (args.project) {
-			console.log(`[dogfood] Target project: ${args.project}`);
+			console.log(`[launch] Target project: ${args.project}`);
 		} else {
-			console.log(`[dogfood] No --project provided; launching from non-git cwd ${launchCwd}`);
-			console.log("[dogfood] Kanban will open the first indexed project if one exists.");
+			console.log(`[launch] No --project provided; launching from non-git cwd ${launchCwd}`);
+			console.log("[launch] Kanban will open the first indexed project if one exists.");
 		}
-		console.log(`[dogfood] Runtime port: ${args.port}`);
+		console.log(`[launch] Runtime port: ${args.port}`);
 
 		return await runRuntimeCommand(nodeBinary, [cliEntrypoint, ...launchArgs], {
 			cwd: launchCwd,
-			env: buildDogfoodRuntimeEnv(process.env),
+			env: buildLaunchRuntimeEnv(process.env),
 		});
 	} finally {
 		await releaseCleanupOwnership(cleanupOwnership.ownerToken);
@@ -474,6 +474,6 @@ main()
 	})
 	.catch((error) => {
 		const message = error instanceof Error ? error.message : String(error);
-		console.error(`[dogfood] ${message}`);
+		console.error(`[launch] ${message}`);
 		process.exit(1);
 	});

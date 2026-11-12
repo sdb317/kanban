@@ -1,6 +1,6 @@
 # Commands & Debugging
 
-## Full-stack dev vs. dogfood
+## Full-stack dev vs. normal
 
 ### `npm run dev:full` — iterate on Kanban's own code
 
@@ -10,16 +10,16 @@
 - Defaults to `--skip-shutdown-cleanup` (override with `--with-shutdown-cleanup`).
 - Runs from the current working directory — no `--project` flag.
 
-### `npm run dogfood` — run Kanban as a real tool
+### `npm run launch` — run Kanban as a real tool
 
 - Runs `npm run build` first (unless `--skip-build`), then launches the built `dist/cli.js` — no watch/HMR, so rebuild to pick up changes.
 - Flags: `--project <path>`, `--port <number|auto>`, `--open`, `--skip-build`, `--host`, `--https`, `--cert`, `--key`. Does not open a browser tab unless `--open` is passed.
 - Strips repo-local `node_modules/.bin` from PATH so globally installed agent CLIs aren't shadowed.
 
-To debug the full stack against a real project folder, dogfood is the right tool (it accepts `--project`):
+To debug the full stack against a real project folder, `npm run launch` is the right tool (it accepts `--project`):
 
 ```powershell
-npm run dogfood -- --project C:\path\to\real\project
+npm run launch -- --project C:\path\to\real\project
 ```
 
 ## Logging
@@ -48,8 +48,8 @@ $env:CLINE_LOG_LEVEL   = "debug"
 $env:CLINE_LOG_PATH    = "$PWD\kanban.log"   # optional; a file, not a folder
 $env:KANBAN_CLINE_OLLAMA_BASE_URL=http://...:11434
 
-npm run build                                 # dogfood runs the built CLI
-npm run dogfood -- --project C:\path\to\real\project
+npm run build                                 # launch runs the built CLI
+npm run launch -- --project C:\path\to\real\project
 
 # in another terminal
 Get-Content .\kanban.log -Wait

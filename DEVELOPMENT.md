@@ -58,7 +58,7 @@ npm run dev:full -- --with-shutdown-cleanup
 
 If `node_modules` has not been installed in this worktree, `dev:full` auto-runs `npm ci` before launch.
 
-Use `npm run dogfood` when you want to validate the latest built CLI behavior more realistically. It builds the current checkout and launches `dist/cli.js`, which is better for checking packaged behavior, startup and shutdown flows, multi-instance dogfooding, and launch behavior against a target project.
+Use `npm run launch` when you want to validate the latest built CLI behavior more realistically. It builds the current checkout and launches `dist/cli.js`, which is better for checking packaged behavior, startup and shutdown flows, multi-instance launching, and launch behavior against a target project.
 
 ## VS Code F5 debugging
 
@@ -92,7 +92,7 @@ node dist/cli.js --port auto
 
 You can still use `KANBAN_RUNTIME_PORT` if needed, but `--port` is preferred for local multi-instance runs.
 
-## Dogfooding with two Kanban instances
+## Launching with two Kanban instances
 
 Run your stable orchestrator first (main checkout):
 
@@ -106,16 +106,16 @@ Then run a test checkout against a target project (feature worktree):
 
 ```bash
 cd /path/to/kanban-feature-worktree
-npm run dogfood -- --project /path/to/target/repo --port auto
+npm run launch -- --project /path/to/target/repo --port auto
 ```
 
 If `--project` is omitted, the launcher starts Kanban from a non-git cwd so runtime behaves like launching outside a git repo and opens the first indexed project (if any):
 
 ```bash
-npm run dogfood -- --port auto
+npm run launch -- --port auto
 ```
 
-Dogfood launcher behavior:
+Launcher behavior:
 
 - builds the current checkout by default
 - launches `dist/cli.js` with `cwd` set to the target project
@@ -159,7 +159,7 @@ npm run unlink
 ## Scripts
 
 - `npm run build`: build runtime and bundled web UI into `dist`
-- `npm run dogfood -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]`: build and launch this checkout, optionally targeting a specific project path
+- `npm run launch -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]`: build and launch this checkout, optionally targeting a specific project path
 - `npm run dev`: run CLI in watch mode
 - `npm run dev:full`: run the runtime watch server and Vite web UI dev server together
 - `npm run web:dev`: run web UI dev server
