@@ -13,7 +13,7 @@
 ### `npm run dogfood` — run Kanban as a real tool
 
 - Runs `npm run build` first (unless `--skip-build`), then launches the built `dist/cli.js` — no watch/HMR, so rebuild to pick up changes.
-- Flags: `--project <path>`, `--port <number|auto>`, `--no-open`, `--skip-build`, `--host`, `--https`, `--cert`, `--key`.
+- Flags: `--project <path>`, `--port <number|auto>`, `--open`, `--skip-build`, `--host`, `--https`, `--cert`, `--key`. Does not open a browser tab unless `--open` is passed.
 - Strips repo-local `node_modules/.bin` from PATH so globally installed agent CLIs aren't shadowed.
 
 To debug the full stack against a real project folder, dogfood is the right tool (it accepts `--project`):

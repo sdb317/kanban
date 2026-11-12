@@ -19,7 +19,7 @@ const cleanupOwnerLockPath = resolve(tmpdir(), "kanban-dogfood-cleanup-owner.loc
 
 function printHelp() {
 	console.log(
-		"Usage: npm run dogfood -- [--project <path>] [--port <number|auto>] [--no-open] [--skip-build]",
+		"Usage: npm run dogfood -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]",
 	);
 }
 
@@ -155,7 +155,7 @@ async function releaseCleanupOwnership(ownerToken) {
 function parseArgs(argv) {
 	let project = "";
 	let port = "auto";
-	let noOpen = false;
+	let open = false;
 	let skipBuild = false;
 	/** @type {string | null} */
 	let host = null;
@@ -197,8 +197,8 @@ function parseArgs(argv) {
 			port = arg.slice("--port=".length);
 			continue;
 		}
-		if (arg === "--no-open") {
-			noOpen = true;
+		if (arg === "--open") {
+			open = true;
 			continue;
 		}
 		if (arg === "--skip-build") {
@@ -254,7 +254,7 @@ function parseArgs(argv) {
 	return {
 		project: project.trim() ? resolve(project.trim()) : null,
 		port: port.trim() || "auto",
-		noOpen,
+		open,
 		skipBuild,
 		host,
 		https,
@@ -432,7 +432,11 @@ async function main() {
 		if (skipShutdownCleanup) {
 			launchArgs.push("--skip-shutdown-cleanup");
 		}
-		if (args.noOpen) {
+		// Dogfood defaults to not opening a browser tab; the underlying CLI opens
+		// by default, so translate the opt-in into the CLI's negation flag.
+		if (args.open) {
+			launchArgs.push("--open");
+		} else {
 			launchArgs.push("--no-open");
 		}
 		if (args.https) {

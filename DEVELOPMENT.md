@@ -120,7 +120,7 @@ Dogfood launcher behavior:
 - builds the current checkout by default
 - launches `dist/cli.js` with `cwd` set to the target project
 - supports `--port <number|auto>`
-- supports `--no-open`
+- supports `--open` to opt in to opening a browser tab (does not open by default)
 - supports `--skip-build` when you already built and want faster restarts
 - is the right choice when you want to test the latest built CLI rather than the source-mode dev server
 
@@ -159,7 +159,7 @@ npm run unlink
 ## Scripts
 
 - `npm run build`: build runtime and bundled web UI into `dist`
-- `npm run dogfood -- [--project <path>] [--port <number|auto>] [--no-open] [--skip-build]`: build and launch this checkout, optionally targeting a specific project path
+- `npm run dogfood -- [--project <path>] [--port <number|auto>] [--open] [--skip-build]`: build and launch this checkout, optionally targeting a specific project path
 - `npm run dev`: run CLI in watch mode
 - `npm run dev:full`: run the runtime watch server and Vite web UI dev server together
 - `npm run web:dev`: run web UI dev server
