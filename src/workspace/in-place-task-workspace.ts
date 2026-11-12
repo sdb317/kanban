@@ -24,7 +24,7 @@ export class ProjectFolderUnavailableError extends Error {
  *
  * Every task agent and task shell runs with the project folder itself as its
  * cwd. These functions run no git, write no files, and never read
- * `~/.cline/worktrees`. They mirror the signatures of the Worktree-mode helpers
+ * `<project>/.kanban/worktrees`. They mirror the signatures of the Worktree-mode helpers
  * in `task-worktree.ts` (`resolveTaskCwd`, `ensureTaskWorktreeIfDoesntExist`,
  * `deleteTaskWorktree`, `getTaskWorkspaceInfo`) so the task workspace provider
  * can forward to either implementation uniformly (Req 12.3).

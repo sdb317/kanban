@@ -19,6 +19,7 @@ import {
 import { createGitProcessEnv } from "../core/git-process-env";
 import { updateTaskDependencies } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
+import { KANBAN_TASK_WORKTREES_DIR_NAME } from "../workspace/task-worktree-path";
 
 // Compact per-column card counts so state-change logs capture the shape of a
 // board transition without serializing the entire board.
@@ -31,8 +32,6 @@ function summarizeBoard(board: RuntimeBoardData): Record<string, number> {
 }
 
 const RUNTIME_HOME_DIR = ".kanban";
-const RUNTIME_WORKTREES_PARENT_DIR = ".cline";
-const RUNTIME_WORKTREES_DIR = "worktrees";
 const WORKSPACES_DIR = "workspaces";
 const INDEX_FILENAME = "index.json";
 const BOARD_FILENAME = "board.json";
@@ -172,8 +171,8 @@ export function getRuntimeHomePath(): string {
 	return join(homedir(), RUNTIME_HOME_DIR);
 }
 
-export function getTaskWorktreesHomePath(): string {
-	return join(homedir(), RUNTIME_WORKTREES_PARENT_DIR, RUNTIME_WORKTREES_DIR);
+export function getTaskWorktreesRootPath(repoPath: string): string {
+	return join(resolve(repoPath), RUNTIME_HOME_DIR, KANBAN_TASK_WORKTREES_DIR_NAME);
 }
 
 export function getWorkspacesRootPath(): string {

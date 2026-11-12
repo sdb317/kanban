@@ -2659,11 +2659,7 @@ describe("createRuntimeApi startTaskSession", () => {
 		// os.homedir() reads USERPROFILE on Windows.
 		process.env.USERPROFILE = tempHome;
 		mkdirSync(tempHome, { recursive: true });
-		const debugPaths = [
-			join(tempHome, ".cline", "data"),
-			join(tempHome, ".kanban"),
-			join(tempHome, ".cline", "worktrees"),
-		];
+		const debugPaths = [join(tempHome, ".cline", "data"), join(tempHome, ".kanban")];
 		for (const path of debugPaths) {
 			mkdirSync(path, { recursive: true });
 			writeFileSync(join(path, "marker.txt"), "present");
@@ -2715,11 +2711,7 @@ describe("createRuntimeApi startTaskSession", () => {
 		// os.homedir() reads USERPROFILE on Windows.
 		process.env.USERPROFILE = tempHome;
 		mkdirSync(tempHome, { recursive: true });
-		const debugPaths = [
-			join(tempHome, ".cline", "data"),
-			join(tempHome, ".kanban"),
-			join(tempHome, ".cline", "worktrees"),
-		];
+		const debugPaths = [join(tempHome, ".cline", "data"), join(tempHome, ".kanban")];
 		for (const path of debugPaths) {
 			mkdirSync(path, { recursive: true });
 			writeFileSync(join(path, "marker.txt"), "present");

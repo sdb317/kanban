@@ -9,36 +9,36 @@ import { getRuntimeAgentCatalogEntry, getRuntimeLaunchSupportedAgentCatalog } fr
 import { areRuntimeProjectShortcutsEqual } from "@runtime-shortcuts";
 import { WORKTREES_REQUIRE_GIT_MESSAGE } from "@runtime-worktree-setting";
 import {
-    Bell,
-    Bot,
-    Check,
-    ChevronDown,
-    Circle,
-    CircleDot,
-    ExternalLink,
-    FolderOpen,
-    GitCommit,
-    Palette,
-    Plus,
-    Settings,
-    SlidersHorizontal,
-    X,
+	Bell,
+	Bot,
+	Check,
+	ChevronDown,
+	Circle,
+	CircleDot,
+	ExternalLink,
+	FolderOpen,
+	GitCommit,
+	Palette,
+	Plus,
+	Settings,
+	SlidersHorizontal,
+	X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    buildWorktreeSaveRequest,
-    type ProjectWorktreeOverrideChoice,
-    resolveProjectOverrideChoice,
+	buildWorktreeSaveRequest,
+	type ProjectWorktreeOverrideChoice,
+	resolveProjectOverrideChoice,
 } from "@/components/settings/build-worktree-save-request";
 import { WorktreeSettingsSection } from "@/components/settings/worktree-settings-section";
 import { AccountOrganizationSection } from "@/components/shared/account-organization-section";
 import { ClineSetupSection } from "@/components/shared/cline-setup-section";
 import {
-    getRuntimeShortcutIconComponent,
-    getRuntimeShortcutPickerOption,
-    RUNTIME_SHORTCUT_ICON_OPTIONS,
-    type RuntimeShortcutIconOption,
-    type RuntimeShortcutPickerIconId,
+	getRuntimeShortcutIconComponent,
+	getRuntimeShortcutPickerOption,
+	RUNTIME_SHORTCUT_ICON_OPTIONS,
+	type RuntimeShortcutIconOption,
+	type RuntimeShortcutPickerIconId,
 } from "@/components/shared/runtime-shortcut-icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
@@ -51,16 +51,16 @@ import { previewThemeId, readStoredThemeId, saveThemeId, THEME_GROUPS, THEMES, t
 import { useLayoutCustomizations } from "@/resize/layout-customizations";
 import { openFileOnHost } from "@/runtime/runtime-config-query";
 import type {
-    RuntimeAgentId,
-    RuntimeClineMcpServerAuthStatus,
-    RuntimeConfigResponse,
-    RuntimeProjectShortcut,
+	RuntimeAgentId,
+	RuntimeClineMcpServerAuthStatus,
+	RuntimeConfigResponse,
+	RuntimeProjectShortcut,
 } from "@/runtime/types";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
-    type BrowserNotificationPermission,
-    getBrowserNotificationPermission,
-    requestBrowserNotificationPermission,
+	type BrowserNotificationPermission,
+	getBrowserNotificationPermission,
+	requestBrowserNotificationPermission,
 } from "@/utils/notification-permission";
 import { formatPathForDisplay } from "@/utils/path-display";
 import { useUnmount, useWindowEvent } from "@/utils/react-use";
@@ -1243,15 +1243,6 @@ export function RuntimeSettingsDialog({
 				</div>
 			</div>
 			<DialogFooter>
-				<Button
-					size="sm"
-					variant="ghost"
-					className="mr-auto mt-[3px]"
-					icon={<ExternalLink size={14} />}
-					onClick={() => window.open("https://docs.cline.bot/kanban/overview", "_blank")}
-				>
-					Read the docs
-				</Button>
 				<Button onClick={() => handleDialogOpenChange(false)} disabled={controlsDisabled}>
 					Cancel
 				</Button>

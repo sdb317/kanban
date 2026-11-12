@@ -8,14 +8,14 @@ import { resolveKanbanCommandParts } from "../core/kanban-command";
 import { buildShellCommandLine } from "../core/shell";
 import { detectAutoUpdateInstallation, UpdatePackageManager } from "../update/update";
 import {
-	IN_PLACE_SIDEBAR_INTRO_SENTENCE,
-	IN_PLACE_SIDEBAR_NOT_CODING_AGENT_SENTENCE,
-	IN_PLACE_SIDEBAR_SHARED_FOLDER_BULLET,
-	renderInPlaceTaskCreateSection,
-	renderInPlaceTaskDeleteSection,
-	renderInPlaceTaskDoneSection,
-	renderInPlaceTaskStartSection,
-	renderInPlaceTaskUpdateSection,
+    IN_PLACE_SIDEBAR_INTRO_SENTENCE,
+    IN_PLACE_SIDEBAR_NOT_CODING_AGENT_SENTENCE,
+    IN_PLACE_SIDEBAR_SHARED_FOLDER_BULLET,
+    renderInPlaceTaskCreateSection,
+    renderInPlaceTaskDeleteSection,
+    renderInPlaceTaskDoneSection,
+    renderInPlaceTaskStartSection,
+    renderInPlaceTaskUpdateSection,
 } from "./sidebar-prompt-in-place-sections.js";
 
 const DEFAULT_COMMAND_PREFIX = "kanban";
@@ -159,7 +159,7 @@ export function renderAppendSystemPrompt(commandPrefix: string, options: RenderA
 		: "";
 
 	const workspaceLocationBullet = worktreesEnabled
-		? "- If your current working directory is inside `.cline/worktrees/`, you are inside a Kanban task worktree. In that case, create or manage tasks against the main workspace path, not the task worktree path. Pass the main workspace with `--project-path`."
+		? "- If your current working directory is inside `.kanban/worktrees/`, you are inside a Kanban task worktree. In that case, create or manage tasks against the main workspace path, not the task worktree path. Pass the main workspace with `--project-path`."
 		: IN_PLACE_SIDEBAR_SHARED_FOLDER_BULLET;
 
 	const taskCreateSection = worktreesEnabled

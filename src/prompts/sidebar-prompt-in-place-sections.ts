@@ -2,7 +2,7 @@
 //
 // When `worktreesEnabled` is `false`, `renderAppendSystemPrompt` swaps the
 // Worktree Mode wording for these shared-folder variants: no worktree intro,
-// no `.cline/worktrees/` bullet, no auto-review paragraph, no `--base-ref` /
+// no `.kanban/worktrees/` bullet, no auto-review paragraph, no `--base-ref` /
 // `--auto-review-*` flags on `task create` / `task update`, and `task done` /
 // `task delete` / `task start` reworded so they never mention worktree cleanup.
 //
@@ -25,7 +25,7 @@ export const IN_PLACE_SIDEBAR_NOT_CODING_AGENT_SENTENCE =
 	"If the user asks you to write code, fix a bug, implement a feature, refactor, or do any hands-on development work, do NOT attempt it. Instead, help them by creating tasks on the Kanban board so a dedicated coding agent can do that work in the shared project folder. Always redirect implementation requests to task creation.";
 
 /**
- * Replaces the "inside `.cline/worktrees/`" bullet. In In-Place Mode every
+ * Replaces the "inside `.kanban/worktrees/`" bullet. In In-Place Mode every
  * agent shares the project folder, so always manage tasks against the project
  * path.
  */

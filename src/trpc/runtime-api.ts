@@ -48,6 +48,7 @@ import { resolveAgentAppendSystemPrompt } from "../prompts/resolve-agent-append-
 import { openInBrowser } from "../server/browser";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
 import type { TerminalSessionManager } from "../terminal/session-manager";
+import { getTaskWorktreesRootPath, listWorkspaceIndexEntries } from "../state/workspace-state";
 import { ProjectFolderUnavailableError } from "../workspace/in-place-task-workspace.js";
 import type { TaskWorkspaceProvider } from "../workspace/task-workspace-provider.js";
 import { captureTaskTurnCheckpoint } from "../workspace/turn-checkpoints";
@@ -82,11 +83,10 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			deps.broadcastClineMcpAuthStatusesUpdated?.(statuses);
 		},
 	});
-	const debugResetTargetPaths = [
-		join(homedir(), ".cline", "data"),
-		join(homedir(), ".kanban"),
-		join(homedir(), ".cline", "worktrees"),
-	] as const;
+	// Global Kanban state lives under the home dir. Task worktrees now live inside
+	// each project at `<project>/.kanban/worktrees`, so they are collected per
+	// project from the workspace index at reset time (see `resetAllState`).
+	const debugResetTargetPaths = [join(homedir(), ".cline", "data"), join(homedir(), ".kanban")] as const;
 
 	const buildConfigResponse = (runtimeConfig: RuntimeConfigState) =>
 		buildRuntimeConfigResponse(runtimeConfig, clineProviderService.getProviderSettingsSummary());
@@ -733,14 +733,20 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 		},
 		resetAllState: async (_workspaceScope) => {
 			await deps.prepareForStateReset?.();
+			// Per-project task worktree roots (`<project>/.kanban/worktrees`) are not
+			// under the home dir, so enumerate them from the workspace index.
+			const projectWorktreeRoots = await listWorkspaceIndexEntries()
+				.then((entries) => entries.map((entry) => getTaskWorktreesRootPath(entry.repoPath)))
+				.catch(() => []);
+			const clearedPaths = [...debugResetTargetPaths, ...projectWorktreeRoots];
 			await Promise.all(
-				debugResetTargetPaths.map(async (path) => {
+				clearedPaths.map(async (path) => {
 					await rm(path, { recursive: true, force: true });
 				}),
 			);
 			return {
 				ok: true,
-				clearedPaths: [...debugResetTargetPaths],
+				clearedPaths,
 			};
 		},
 		openFile: async (input) => {

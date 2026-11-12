@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-	hasCodexWorkspaceTrustPrompt,
-	shouldAutoConfirmCodexWorkspaceTrust,
+    hasCodexWorkspaceTrustPrompt,
+    shouldAutoConfirmCodexWorkspaceTrust,
 } from "../../../src/terminal/codex-workspace-trust";
 
 const originalHome = process.env.HOME;
@@ -33,7 +33,7 @@ afterEach(() => {
 describe("codex workspace trust helpers", () => {
 	it("detects Codex trust prompt", () => {
 		const codexPrompt = `
-You are in /Users/saoud/.cline/worktrees/6df3a/mcp-swift-sdk
+You are in /Users/saoud/projects/mcp-swift-sdk/.kanban/worktrees/6df3a
 
 Do you trust the contents of this directory? Working with untrusted
 contents comes with higher risk of prompt injection.
@@ -53,7 +53,7 @@ Press enter to continue`;
 
 	it("auto-confirms all codex sessions", () => {
 		const home = setupTempHome();
-		const taskWorktreePath = join(home, ".cline", "worktrees", "task-123", "context");
+		const taskWorktreePath = join(home, "projects", "repo", ".kanban", "worktrees", "task-123");
 		const externalPath = join(home, "projects", "repo");
 
 		expect(shouldAutoConfirmCodexWorkspaceTrust("codex", taskWorktreePath)).toBe(true);

@@ -2,14 +2,14 @@ import { access, lstat, mkdir, readdir, readFile, rm, symlink } from "node:fs/pr
 import { dirname, isAbsolute, join } from "node:path";
 
 import type {
-	RuntimeTaskWorkspaceInfoResponse,
-	RuntimeWorktreeDeleteResponse,
-	RuntimeWorktreeEnsureResponse,
+    RuntimeTaskWorkspaceInfoResponse,
+    RuntimeWorktreeDeleteResponse,
+    RuntimeWorktreeEnsureResponse,
 } from "../core/api-contract";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
-import { getRuntimeHomePath, getTaskWorktreesHomePath, loadWorkspaceContext } from "../state/workspace-state";
+import { getRuntimeHomePath, getTaskWorktreesRootPath, loadWorkspaceContext } from "../state/workspace-state";
 import { getGitCommandErrorMessage, getGitStdout, readGitHeadInfo, runGit } from "./git-utils";
-import { getWorkspaceFolderLabelForWorktreePath, normalizeTaskIdForWorktreePath } from "./task-worktree-path";
+import { KANBAN_RUNTIME_HOME_DIR_NAME, normalizeTaskIdForWorktreePath } from "./task-worktree-path";
 import { listTurbopackNodeModulesSymlinkSkipPaths } from "./task-worktree-turbopack";
 
 const KANBAN_MANAGED_EXCLUDE_BLOCK_START = "# kanban-managed-symlinked-ignored-paths:start";
@@ -20,6 +20,7 @@ const TASK_PATCH_FILE_SUFFIX = ".patch";
 
 const SYMLINK_PATH_SEGMENT_BLACKLIST = new Set([
 	".git",
+	".kanban",
 	".DS_Store",
 	"Thumbs.db",
 	"Desktop.ini",
@@ -115,13 +116,8 @@ async function withTaskWorktreeSetupLock<T>(repoPath: string, operation: () => P
 	return await lockedFileSystem.withLock(await getTaskWorktreeSetupLock(repoPath), operation);
 }
 
-function getWorktreesRootPath(taskId: string): string {
-	const normalizedTaskId = normalizeTaskIdForWorktreePath(taskId);
-	return join(getTaskWorktreesHomePath(), normalizedTaskId);
-}
-
-function getWorktreesBaseRootPath(): string {
-	return getTaskWorktreesHomePath();
+function getWorktreesBaseRootPath(repoPath: string): string {
+	return getTaskWorktreesRootPath(repoPath);
 }
 
 function getTrashedTaskPatchesRootPath(): string {
@@ -129,8 +125,8 @@ function getTrashedTaskPatchesRootPath(): string {
 }
 
 function getTaskWorktreePath(repoPath: string, taskId: string): string {
-	const workspaceLabel = getWorkspaceFolderLabelForWorktreePath(repoPath);
-	return join(getWorktreesRootPath(taskId), workspaceLabel);
+	const normalizedTaskId = normalizeTaskIdForWorktreePath(taskId);
+	return join(getTaskWorktreesRootPath(repoPath), normalizedTaskId);
 }
 
 function getTaskPatchFilePrefix(taskId: string): string {
@@ -335,16 +331,16 @@ async function syncManagedIgnoredPathExcludes(repoPath: string, relativePaths: s
 
 	const existingContent = await readFile(excludePath, "utf8").catch(() => "");
 	const preservedContent = stripManagedExcludeBlock(existingContent);
-	const managedPaths = getUniquePaths(relativePaths);
-	const managedBlock =
-		managedPaths.length === 0
-			? ""
-			: [
-					KANBAN_MANAGED_EXCLUDE_BLOCK_START,
-					"# Keep symlinked ignored paths ignored inside Kanban task worktrees.",
-					...managedPaths.map((relativePath) => `/${escapeGitIgnoreLiteral(relativePath)}`),
-					KANBAN_MANAGED_EXCLUDE_BLOCK_END,
-				].join("\n");
+	// Always keep the per-project Kanban state folder (which now holds task
+	// worktrees under `.kanban/worktrees`) out of the host repo's status, then
+	// add any symlinked ignored paths mirrored into worktrees.
+	const managedPaths = getUniquePaths([KANBAN_RUNTIME_HOME_DIR_NAME, ...relativePaths]);
+	const managedBlock = [
+		KANBAN_MANAGED_EXCLUDE_BLOCK_START,
+		"# Keep Kanban's project state and symlinked ignored paths out of this repo.",
+		...managedPaths.map((relativePath) => `/${escapeGitIgnoreLiteral(relativePath)}`),
+		KANBAN_MANAGED_EXCLUDE_BLOCK_END,
+	].join("\n");
 
 	const nextContent = [preservedContent, managedBlock].filter(Boolean).join("\n\n").replace(/\n+$/g, "");
 	const normalizedNextContent = nextContent ? `${nextContent}\n` : "";
@@ -568,7 +564,7 @@ export async function deleteTaskWorktree(options: {
 }): Promise<RuntimeWorktreeDeleteResponse> {
 	try {
 		const taskId = normalizeTaskIdForWorktreePath(options.taskId);
-		const rootPath = getWorktreesBaseRootPath();
+		const rootPath = getWorktreesBaseRootPath(options.repoPath);
 		const worktreePath = getTaskWorktreePath(options.repoPath, taskId);
 		if (!(await pathExists(worktreePath))) {
 			await deleteTaskPatchFiles(taskId);

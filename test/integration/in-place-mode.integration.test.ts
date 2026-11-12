@@ -32,7 +32,7 @@ const requireFromHere = createRequire(import.meta.url);
  *
  * The core guarantee (Req 14.2/14.3, 3.4, 3.5, 6.4): the runtime itself touches
  * nothing in the Project_Path outside `<project>/.kanban`, spawns no git for
- * checkpoints, creates no worktree under `~/.cline/worktrees`, and leaves
+ * checkpoints, creates no worktree under `<project>/.kanban/worktrees`, and leaves
  * `refs/kanban/checkpoints/*` unchanged while running task start, a `to_review`
  * hook, trash, restore, and permanent delete through the runtime API.
  */
@@ -425,7 +425,7 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 
 			initGitRepositoryWithCommit(projectPath);
 
-			const worktreesDir = join(tempHome, ".cline", "worktrees");
+			const worktreesDir = join(projectPath, ".kanban", "worktrees");
 			const kanbanStatePrefix = ".kanban";
 
 			// Baseline snapshots before any runtime interaction.
@@ -562,9 +562,9 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 			expect(listBranches(projectPath)).toBe(branchesBefore);
 			expect(readInfoExclude(projectPath)).toBe(infoExcludeBefore);
 
-			// Req 3.4: no worktree directory created under ~/.cline/worktrees.
+			// Req 3.4: no worktree directory created under <project>/.kanban/worktrees.
 			if (worktreesExistedBefore) {
-				throw new Error("Expected ~/.cline/worktrees to be absent in the baseline.");
+				throw new Error("Expected <project>/.kanban/worktrees to be absent in the baseline.");
 			}
 			expect(existsSync(worktreesDir)).toBe(false);
 

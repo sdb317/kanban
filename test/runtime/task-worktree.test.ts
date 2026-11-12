@@ -18,12 +18,11 @@ const lockedFileSystemMocks = vi.hoisted(() => ({
 
 const workspaceStateMocks = vi.hoisted(() => ({
 	getRuntimeHomePath: vi.fn(),
-	getTaskWorktreesHomePath: vi.fn(),
+	getTaskWorktreesRootPath: vi.fn(),
 	loadWorkspaceContext: vi.fn(),
 }));
 
 const taskWorktreePathMocks = vi.hoisted(() => ({
-	getWorkspaceFolderLabelForWorktreePath: vi.fn(),
 	normalizeTaskIdForWorktreePath: vi.fn(),
 }));
 
@@ -42,13 +41,12 @@ vi.mock("../../src/fs/locked-file-system.js", () => ({
 
 vi.mock("../../src/state/workspace-state.js", () => ({
 	getRuntimeHomePath: workspaceStateMocks.getRuntimeHomePath,
-	getTaskWorktreesHomePath: workspaceStateMocks.getTaskWorktreesHomePath,
+	getTaskWorktreesRootPath: workspaceStateMocks.getTaskWorktreesRootPath,
 	loadWorkspaceContext: workspaceStateMocks.loadWorkspaceContext,
 }));
 
 vi.mock("../../src/workspace/task-worktree-path.js", () => ({
-	getWorkspaceFolderLabelForWorktreePath: taskWorktreePathMocks.getWorkspaceFolderLabelForWorktreePath,
-	KANBAN_TASK_WORKTREES_DIR_NAME: "worktrees",
+	KANBAN_RUNTIME_HOME_DIR_NAME: ".kanban",
 	normalizeTaskIdForWorktreePath: taskWorktreePathMocks.normalizeTaskIdForWorktreePath,
 }));
 
@@ -107,9 +105,8 @@ describe.sequential("task-worktree serialization", () => {
 		lockedFileSystemMocks.withLock.mockReset();
 		lockedFileSystemMocks.writeTextFileAtomic.mockReset();
 		workspaceStateMocks.getRuntimeHomePath.mockReset();
-		workspaceStateMocks.getTaskWorktreesHomePath.mockReset();
+		workspaceStateMocks.getTaskWorktreesRootPath.mockReset();
 		workspaceStateMocks.loadWorkspaceContext.mockReset();
-		taskWorktreePathMocks.getWorkspaceFolderLabelForWorktreePath.mockReset();
 		taskWorktreePathMocks.normalizeTaskIdForWorktreePath.mockReset();
 
 		let lockQueue = Promise.resolve();
@@ -140,17 +137,16 @@ describe.sequential("task-worktree serialization", () => {
 		try {
 			const repoPath = join(sandboxRoot, "repo");
 			const runtimeHomePath = join(sandboxRoot, "runtime-home");
-			const worktreesHomePath = join(sandboxRoot, "worktrees-home");
+			const worktreesRootPath = join(repoPath, ".kanban", "worktrees");
 			mkdirSync(join(repoPath, ".git"), { recursive: true });
 			mkdirSync(runtimeHomePath, { recursive: true });
-			mkdirSync(worktreesHomePath, { recursive: true });
+			mkdirSync(worktreesRootPath, { recursive: true });
 
 			workspaceStateMocks.getRuntimeHomePath.mockReturnValue(runtimeHomePath);
-			workspaceStateMocks.getTaskWorktreesHomePath.mockReturnValue(worktreesHomePath);
+			workspaceStateMocks.getTaskWorktreesRootPath.mockReturnValue(worktreesRootPath);
 			workspaceStateMocks.loadWorkspaceContext.mockResolvedValue({
 				repoPath,
 			});
-			taskWorktreePathMocks.getWorkspaceFolderLabelForWorktreePath.mockReturnValue("repo");
 			taskWorktreePathMocks.normalizeTaskIdForWorktreePath.mockImplementation((taskId: string) => taskId);
 
 			const worktreeHeads = new Map<string, string>();

@@ -12,7 +12,7 @@ import { renderAppendSystemPrompt } from "../../../src/prompts/append-system-pro
  * Worktree Mode wording for the shared-folder variants in
  * `sidebar-prompt-in-place-sections.ts`. The design (Req 11.5) requires the
  * In-Place sidebar prompt to:
- *   - swap the worktree intro and the "inside `.cline/worktrees/`" bullet for
+ *   - swap the worktree intro and the "inside `.kanban/worktrees/`" bullet for
  *     shared-folder wording,
  *   - drop the auto-review paragraph,
  *   - drop the `--base-ref` / `--auto-review-*` flags from the `task create` /
@@ -50,7 +50,7 @@ const COMMAND_PREFIXES: readonly string[] = [
  * prompt. Checked case-insensitively so capitalized variants (e.g. "Worktree")
  * are also caught.
  */
-const FORBIDDEN_CASE_INSENSITIVE: readonly string[] = ["worktree", "worktrees", ".cline/worktrees", "detached head"];
+const FORBIDDEN_CASE_INSENSITIVE: readonly string[] = ["worktree", "worktrees", ".kanban/worktrees", "detached head"];
 
 /**
  * Flag/term fragments that are case-sensitive by nature (CLI flags). These come
@@ -118,7 +118,7 @@ describe("renderAppendSystemPrompt In-Place sidebar (Property 17)", () => {
 		const lower = worktreePrompt.toLowerCase();
 
 		expect(lower).toContain("worktree");
-		expect(lower).toContain(".cline/worktrees");
+		expect(lower).toContain(".kanban/worktrees");
 		expect(worktreePrompt).toContain("--base-ref");
 		expect(worktreePrompt).toContain("--auto-review-enabled");
 		expect(worktreePrompt).toContain("--auto-review-mode");
