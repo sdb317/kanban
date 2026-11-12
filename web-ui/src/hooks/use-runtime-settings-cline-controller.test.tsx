@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useRuntimeSettingsClineController } from "@/hooks/use-runtime-settings-cline-controller";
 import type {
-	RuntimeClineProviderModel,
-	RuntimeClineReasoningEffort,
-	RuntimeConfigResponse,
-	RuntimeTaskClineSettings,
+    RuntimeClineProviderModel,
+    RuntimeClineReasoningEffort,
+    RuntimeConfigResponse,
+    RuntimeTaskClineSettings,
 } from "@/runtime/types";
 
 const fetchClineProviderCatalogMock = vi.hoisted(() => vi.fn());
@@ -73,7 +73,7 @@ function createRuntimeConfigResponse(
 		agentAutonomousModeEnabled: true,
 		effectiveCommand: "cline",
 		globalConfigPath: "/tmp/global-config.json",
-		projectConfigPath: "/tmp/project/.cline/kanban/config.json",
+		projectConfigPath: "/tmp/project/.kanban/config.json",
 		readyForReviewNotificationsEnabled: true,
 		detectedCommands: ["cline"],
 		agents: [

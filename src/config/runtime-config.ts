@@ -64,11 +64,9 @@ export interface RuntimeConfigUpdateInput {
 	projectWorktreesEnabled?: boolean | null;
 }
 
-const RUNTIME_HOME_PARENT_DIR = ".cline";
-const RUNTIME_HOME_DIR = "kanban";
+const RUNTIME_HOME_DIR = ".kanban";
 const CONFIG_FILENAME = "config.json";
-const PROJECT_CONFIG_PARENT_DIR = ".cline";
-const PROJECT_CONFIG_DIR = "kanban";
+const PROJECT_CONFIG_DIR = ".kanban";
 const PROJECT_CONFIG_FILENAME = "config.json";
 const DEFAULT_AGENT_ID: RuntimeAgentId = "kiro";
 const AUTO_SELECT_AGENT_PRIORITY: readonly RuntimeAgentId[] = ["kiro", "claude"];
@@ -130,7 +128,7 @@ export function pickBestInstalledAgentIdFromDetected(detectedCommands: readonly 
 }
 
 function getRuntimeHomePath(): string {
-	return join(homedir(), RUNTIME_HOME_PARENT_DIR, RUNTIME_HOME_DIR);
+	return join(homedir(), RUNTIME_HOME_DIR);
 }
 
 function normalizeAgentId(agentId: RuntimeAgentId | string | null | undefined): RuntimeAgentId {
@@ -222,7 +220,7 @@ export function getRuntimeGlobalConfigPath(): string {
 }
 
 export function getRuntimeProjectConfigPath(cwd: string): string {
-	return join(resolve(cwd), PROJECT_CONFIG_PARENT_DIR, PROJECT_CONFIG_DIR, PROJECT_CONFIG_FILENAME);
+	return join(resolve(cwd), PROJECT_CONFIG_DIR, PROJECT_CONFIG_FILENAME);
 }
 
 interface RuntimeConfigPaths {
@@ -474,7 +472,7 @@ async function writeRuntimeProjectConfigFile(
 		payload.worktreesEnabled = worktreePayloadValue;
 	}
 
-	// `writeJsonFileAtomic` creates `<project>/.cline/kanban` (the payload's
+	// `writeJsonFileAtomic` creates `<project>/.kanban` (the payload's
 	// parent directory) recursively, so no other folders are created.
 	await lockedFileSystem.writeJsonFileAtomic(configPath, payload, {
 		lock: null,

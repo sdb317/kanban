@@ -5,10 +5,10 @@ import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-	getRuntimeGlobalConfigPath,
-	getRuntimeProjectConfigPath,
-	loadRuntimeConfig,
-	updateRuntimeConfig,
+    getRuntimeGlobalConfigPath,
+    getRuntimeProjectConfigPath,
+    loadRuntimeConfig,
+    updateRuntimeConfig,
 } from "../../../src/config/runtime-config";
 import { createTempProject, type TempKanbanHome, withTempKanbanHome } from "../../utilities/temp-kanban-home.js";
 
@@ -36,7 +36,7 @@ const invalidWorktreeValueArbitrary: fc.Arbitrary<unknown> = fc.oneof(
 	fc.constant({ a: 1 }),
 );
 
-/** Writes a config.json at `path`, creating `.cline/kanban` as needed. */
+/** Writes a config.json at `path`, creating `.kanban` as needed. */
 function writeConfigFile(path: string, contents: Record<string, unknown>): void {
 	mkdirSync(dirname(path), { recursive: true });
 	writeFileSync(path, JSON.stringify(contents, null, 2), "utf8");

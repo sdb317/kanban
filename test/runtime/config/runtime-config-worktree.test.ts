@@ -16,8 +16,8 @@ import { createTempProject, withTempKanbanHome } from "../../utilities/temp-kanb
  * missing-global auto-select side effect never performs PATH detection.
  */
 
-const GLOBAL_CONFIG_SEGMENTS = [".cline", "kanban", "config.json"] as const;
-const PROJECT_CONFIG_SEGMENTS = [".cline", "kanban", "config.json"] as const;
+const GLOBAL_CONFIG_SEGMENTS = [".kanban", "config.json"] as const;
+const PROJECT_CONFIG_SEGMENTS = [".kanban", "config.json"] as const;
 
 interface GlobalConfigFileShape {
 	selectedAgentId?: string;
@@ -44,13 +44,13 @@ function projectConfigPath(projectPath: string): string {
  * `loadRuntimeConfig` never auto-selects an agent via PATH detection.
  */
 function seedGlobalConfig(homeDir: string, extra: Record<string, unknown> = {}): void {
-	const dir = join(homeDir, ".cline", "kanban");
+	const dir = join(homeDir, ".kanban");
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, "config.json"), JSON.stringify({ selectedAgentId: "cline", ...extra }, null, 2), "utf8");
 }
 
 function seedProjectConfig(projectPath: string, contents: Record<string, unknown>): void {
-	const dir = join(projectPath, ".cline", "kanban");
+	const dir = join(projectPath, ".kanban");
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, "config.json"), JSON.stringify(contents, null, 2), "utf8");
 }
@@ -290,7 +290,7 @@ describe.sequential("runtime-config worktree behavior", () => {
 		}
 	});
 
-	it("creates only <project>/.cline/kanban as a folder on a project write", async () => {
+	it("creates only <project>/.kanban as a folder on a project write", async () => {
 		const home = withTempKanbanHome("kanban-home-worktree-folders-");
 		const project = createTempProject({ git: true, prefix: "kanban-project-worktree-folders-" });
 		try {
@@ -298,14 +298,12 @@ describe.sequential("runtime-config worktree behavior", () => {
 
 			await updateRuntimeConfig(project.path, { projectWorktreesEnabled: true });
 
-			// The only Kanban-created folder under the project is `.cline/kanban`.
-			expect(existsSync(join(project.path, ".cline"))).toBe(true);
-			expect(existsSync(join(project.path, ".cline", "kanban"))).toBe(true);
+			// The only Kanban-created folder under the project is `.kanban`.
+			expect(existsSync(join(project.path, ".kanban"))).toBe(true);
 			expect(existsSync(projectConfigPath(project.path))).toBe(true);
 			// No stray sibling folders were created.
-			expect(existsSync(join(project.path, ".kanban"))).toBe(false);
+			expect(existsSync(join(project.path, ".cline"))).toBe(false);
 			expect(existsSync(join(project.path, "kanban"))).toBe(false);
-			expect(existsSync(join(project.path, ".cline", "config.json"))).toBe(false);
 		} finally {
 			project.cleanup();
 			home.cleanup();

@@ -31,7 +31,7 @@ const requireFromHere = createRequire(import.meta.url);
  * the In-Place default under test.
  *
  * The core guarantee (Req 14.2/14.3, 3.4, 3.5, 6.4): the runtime itself touches
- * nothing in the Project_Path outside `<project>/.cline/kanban`, spawns no git for
+ * nothing in the Project_Path outside `<project>/.kanban`, spawns no git for
  * checkpoints, creates no worktree under `~/.cline/worktrees`, and leaves
  * `refs/kanban/checkpoints/*` unchanged while running task start, a `to_review`
  * hook, trash, restore, and permanent delete through the runtime API.
@@ -197,7 +197,7 @@ async function waitForProcessStart(serverProcess: ChildProcess, timeoutMs = 10_0
 			} else {
 				stderr += text;
 			}
-			const match = stdout.match(/Cline Kanban running at (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)/);
+			const match = stdout.match(/Kanban running at (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)/);
 			if (!match || settled) {
 				return;
 			}
@@ -426,7 +426,7 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 			initGitRepositoryWithCommit(projectPath);
 
 			const worktreesDir = join(tempHome, ".cline", "worktrees");
-			const kanbanStatePrefix = join(".cline", "kanban");
+			const kanbanStatePrefix = ".kanban";
 
 			// Baseline snapshots before any runtime interaction.
 			const projectBefore = snapshotPaths(projectPath, { excludePrefixes: [kanbanStatePrefix] });
@@ -545,7 +545,7 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 				await server.stop();
 			}
 
-			// After all runtime operations: the project (outside .cline/kanban) is
+			// After all runtime operations: the project (outside .kanban) is
 			// byte-for-byte identical, refs and branches are unchanged, .git/info/exclude
 			// is untouched, and no checkpoint refs or worktrees were created.
 			const projectAfter = snapshotPaths(projectPath, { excludePrefixes: [kanbanStatePrefix] });
@@ -582,7 +582,7 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 		mkdirSync(join(projectPath, "assets"), { recursive: true });
 		writeFileSync(join(projectPath, "assets", "logo.svg"), "<svg/>\n", "utf8");
 
-		const kanbanStatePrefix = join(".cline", "kanban");
+		const kanbanStatePrefix = ".kanban";
 		const projectBefore = snapshotPaths(projectPath, { excludePrefixes: [kanbanStatePrefix] });
 
 		const port = await getAvailablePort();
@@ -677,7 +677,7 @@ describe.sequential("in-place mode filesystem guarantees integration", () => {
 		}
 
 		// The runtime initialized no git repository and touched nothing outside
-		// .cline/kanban (Req 10.4 / 14.2).
+		// .kanban (Req 10.4 / 14.2).
 		expect(existsSync(join(projectPath, ".git"))).toBe(false);
 		const projectAfter = snapshotPaths(projectPath, { excludePrefixes: [kanbanStatePrefix] });
 		expectSnapshotsEqual(projectBefore, projectAfter);

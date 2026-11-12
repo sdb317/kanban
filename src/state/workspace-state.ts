@@ -6,15 +6,15 @@ import { basename, join, resolve } from "node:path";
 import { z } from "zod";
 import { getKanbanRuntimeLogger } from "../cline-sdk/cline-runtime-logger";
 import {
-	type RuntimeBoardColumnId,
-	type RuntimeBoardData,
-	type RuntimeGitRepositoryInfo,
-	type RuntimeTaskSessionSummary,
-	type RuntimeWorkspaceStateResponse,
-	type RuntimeWorkspaceStateSaveRequest,
-	runtimeBoardDataSchema,
-	runtimeTaskSessionSummarySchema,
-	runtimeWorkspaceStateSaveRequestSchema,
+    type RuntimeBoardColumnId,
+    type RuntimeBoardData,
+    type RuntimeGitRepositoryInfo,
+    type RuntimeTaskSessionSummary,
+    type RuntimeWorkspaceStateResponse,
+    type RuntimeWorkspaceStateSaveRequest,
+    runtimeBoardDataSchema,
+    runtimeTaskSessionSummarySchema,
+    runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
 import { updateTaskDependencies } from "../core/task-board-mutations";
@@ -30,8 +30,8 @@ function summarizeBoard(board: RuntimeBoardData): Record<string, number> {
 	return counts;
 }
 
-const RUNTIME_HOME_PARENT_DIR = ".cline";
-const RUNTIME_HOME_DIR = "kanban";
+const RUNTIME_HOME_DIR = ".kanban";
+const RUNTIME_WORKTREES_PARENT_DIR = ".cline";
 const RUNTIME_WORKTREES_DIR = "worktrees";
 const WORKSPACES_DIR = "workspaces";
 const INDEX_FILENAME = "index.json";
@@ -169,11 +169,11 @@ function createEmptyWorkspaceIndex(): WorkspaceIndexFile {
 }
 
 export function getRuntimeHomePath(): string {
-	return join(homedir(), RUNTIME_HOME_PARENT_DIR, RUNTIME_HOME_DIR);
+	return join(homedir(), RUNTIME_HOME_DIR);
 }
 
 export function getTaskWorktreesHomePath(): string {
-	return join(homedir(), RUNTIME_HOME_PARENT_DIR, RUNTIME_WORKTREES_DIR);
+	return join(homedir(), RUNTIME_WORKTREES_PARENT_DIR, RUNTIME_WORKTREES_DIR);
 }
 
 export function getWorkspacesRootPath(): string {

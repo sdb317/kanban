@@ -16,31 +16,31 @@ import type { RuntimeConfigState } from "../config/runtime-config";
 import { updateGlobalRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config";
 import { WORKTREES_REQUIRE_GIT_MESSAGE } from "../config/worktree-setting";
 import type {
-	RuntimeCommandRunResponse,
-	RuntimeRunUpdateResponse,
-	RuntimeUpdateStatusResponse,
+    RuntimeCommandRunResponse,
+    RuntimeRunUpdateResponse,
+    RuntimeUpdateStatusResponse,
 } from "../core/api-contract";
 import {
-	parseClineAccountSwitchRequest,
-	parseClineAddProviderRequest,
-	parseClineDeviceAuthCompleteRequest,
-	parseClineMcpOAuthRequest,
-	parseClineMcpSettingsSaveRequest,
-	parseClineOauthLoginRequest,
-	parseClineProviderModelsRequest,
-	parseClineProviderSettingsSaveRequest,
-	parseClineUpdateProviderRequest,
-	parseCommandRunRequest,
-	parseRuntimeConfigSaveRequest,
-	parseShellSessionStartRequest,
-	parseTaskChatAbortRequest,
-	parseTaskChatCancelRequest,
-	parseTaskChatMessagesRequest,
-	parseTaskChatReloadRequest,
-	parseTaskChatSendRequest,
-	parseTaskSessionInputRequest,
-	parseTaskSessionStartRequest,
-	parseTaskSessionStopRequest,
+    parseClineAccountSwitchRequest,
+    parseClineAddProviderRequest,
+    parseClineDeviceAuthCompleteRequest,
+    parseClineMcpOAuthRequest,
+    parseClineMcpSettingsSaveRequest,
+    parseClineOauthLoginRequest,
+    parseClineProviderModelsRequest,
+    parseClineProviderSettingsSaveRequest,
+    parseClineUpdateProviderRequest,
+    parseCommandRunRequest,
+    parseRuntimeConfigSaveRequest,
+    parseShellSessionStartRequest,
+    parseTaskChatAbortRequest,
+    parseTaskChatCancelRequest,
+    parseTaskChatMessagesRequest,
+    parseTaskChatReloadRequest,
+    parseTaskChatSendRequest,
+    parseTaskSessionInputRequest,
+    parseTaskSessionStartRequest,
+    parseTaskSessionStopRequest,
 } from "../core/api-validation";
 import { isHomeAgentSessionId } from "../core/home-agent-session";
 import { resolveTaskTitle } from "../core/task-title.js";
@@ -84,7 +84,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 	});
 	const debugResetTargetPaths = [
 		join(homedir(), ".cline", "data"),
-		join(homedir(), ".cline", "kanban"),
+		join(homedir(), ".kanban"),
 		join(homedir(), ".cline", "worktrees"),
 	] as const;
 

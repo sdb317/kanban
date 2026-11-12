@@ -4,11 +4,11 @@ import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-	loadGlobalRuntimeConfig,
-	loadRuntimeConfig,
-	pickBestInstalledAgentIdFromDetected,
-	saveRuntimeConfig,
-	updateRuntimeConfig,
+    loadGlobalRuntimeConfig,
+    loadRuntimeConfig,
+    pickBestInstalledAgentIdFromDetected,
+    saveRuntimeConfig,
+    updateRuntimeConfig,
 } from "../../../src/config/runtime-config";
 import { createTempDir } from "../../utilities/temp-dir";
 
@@ -99,7 +99,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					const state = await loadRuntimeConfig(tempProject);
 					expect(state.selectedAgentId).toBe("claude");
 					const persisted = JSON.parse(
-						readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
+						readFileSync(join(tempHome, ".kanban", "config.json"), "utf8"),
 					) as {
 						selectedAgentId?: string;
 						agentAutonomousModeEnabled?: boolean;
@@ -145,7 +145,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin, replacePath: true }, async () => {
 					const state = await loadRuntimeConfig(tempProject);
 					expect(state.selectedAgentId).toBe("kiro");
-					expect(existsSync(join(tempHome, ".cline", "kanban", "config.json"))).toBe(false);
+					expect(existsSync(join(tempHome, ".kanban", "config.json"))).toBe(false);
 				});
 			} finally {
 				if (previousShell === undefined) {
@@ -167,7 +167,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		try {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const state = await loadRuntimeConfig(tempHome);
-				expect(state.globalConfigPath).toBe(join(tempHome, ".cline", "kanban", "config.json"));
+				expect(state.globalConfigPath).toBe(join(tempHome, ".kanban", "config.json"));
 				expect(state.projectConfigPath).toBeNull();
 				expect(state.shortcuts).toEqual([]);
 
@@ -178,7 +178,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				expect(updated.projectConfigPath).toBeNull();
 
 				const globalPayload = JSON.parse(
-					readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
+					readFileSync(join(tempHome, ".kanban", "config.json"), "utf8"),
 				) as {
 					selectedAgentId?: string;
 					shortcuts?: unknown;
@@ -197,7 +197,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		try {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const state = await loadGlobalRuntimeConfig();
-				expect(state.globalConfigPath).toBe(join(tempHome, ".cline", "kanban", "config.json"));
+				expect(state.globalConfigPath).toBe(join(tempHome, ".kanban", "config.json"));
 				expect(state.projectConfigPath).toBeNull();
 				expect(state.shortcuts).toEqual([]);
 			});
@@ -215,7 +215,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			writeFakeCommand(tempBin, "claude");
 			writeFakeCommand(tempBin, "codex");
 
-			const runtimeConfigDir = join(tempHome, ".cline", "kanban");
+			const runtimeConfigDir = join(tempHome, ".kanban");
 			mkdirSync(runtimeConfigDir, { recursive: true });
 			writeFileSync(
 				join(runtimeConfigDir, "config.json"),
@@ -248,7 +248,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		try {
 			writeFakeCommand(tempBin, "codex");
 
-			const runtimeConfigDir = join(tempHome, ".cline", "kanban");
+			const runtimeConfigDir = join(tempHome, ".kanban");
 			mkdirSync(runtimeConfigDir, { recursive: true });
 			writeFileSync(
 				join(runtimeConfigDir, "config.json"),
@@ -280,7 +280,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		);
 
 		try {
-			const runtimeConfigDir = join(tempHome, ".cline", "kanban");
+			const runtimeConfigDir = join(tempHome, ".kanban");
 			mkdirSync(runtimeConfigDir, { recursive: true });
 			writeFileSync(join(runtimeConfigDir, "config.json"), "{}", "utf8");
 
@@ -297,7 +297,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				});
 
 				const globalPayload = JSON.parse(
-					readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
+					readFileSync(join(tempHome, ".kanban", "config.json"), "utf8"),
 				) as {
 					selectedAgentId?: string;
 					agentAutonomousModeEnabled?: boolean;
@@ -310,7 +310,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				expect(globalPayload.readyForReviewNotificationsEnabled).toBeUndefined();
 				expect(globalPayload.commitPromptTemplate).toBeUndefined();
 				expect(globalPayload.openPrPromptTemplate).toBeUndefined();
-				expect(existsSync(join(tempProject, ".cline", "kanban", "config.json"))).toBe(false);
+				expect(existsSync(join(tempProject, ".kanban", "config.json"))).toBe(false);
 			});
 		} finally {
 			cleanupProject();
@@ -325,7 +325,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		);
 
 		try {
-			const runtimeProjectConfigDir = join(tempProject, ".cline", "kanban");
+			const runtimeProjectConfigDir = join(tempProject, ".kanban");
 			mkdirSync(runtimeProjectConfigDir, { recursive: true });
 			writeFileSync(join(runtimeProjectConfigDir, "config.json"), "{}", "utf8");
 
@@ -341,7 +341,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					openPrPromptTemplate: current.openPrPromptTemplateDefault,
 				});
 
-				expect(existsSync(join(tempProject, ".cline", "kanban", "config.json"))).toBe(false);
+				expect(existsSync(join(tempProject, ".kanban", "config.json"))).toBe(false);
 			});
 		} finally {
 			cleanupProject();
@@ -367,13 +367,13 @@ describe.sequential("runtime-config auto agent selection", () => {
 					commitPromptTemplate: current.commitPromptTemplateDefault,
 					openPrPromptTemplate: current.openPrPromptTemplateDefault,
 				});
-				expect(existsSync(join(tempProject, ".cline", "kanban", "config.json"))).toBe(true);
+				expect(existsSync(join(tempProject, ".kanban", "config.json"))).toBe(true);
 
 				await updateRuntimeConfig(tempProject, {
 					shortcuts: [],
 				});
 
-				expect(existsSync(join(tempProject, ".cline", "kanban", "config.json"))).toBe(false);
+				expect(existsSync(join(tempProject, ".kanban", "config.json"))).toBe(false);
 			});
 		} finally {
 			cleanupProject();
@@ -395,7 +395,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				expect(updated.selectedAgentId).toBe("claude");
 
 				const globalPayload = JSON.parse(
-					readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
+					readFileSync(join(tempHome, ".kanban", "config.json"), "utf8"),
 				) as {
 					selectedAgentId?: string;
 					selectedShortcutLabel?: string;
@@ -427,7 +427,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				expect(updated.agentAutonomousModeEnabled).toBe(false);
 
 				const globalPayload = JSON.parse(
-					readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
+					readFileSync(join(tempHome, ".kanban", "config.json"), "utf8"),
 				) as {
 					agentAutonomousModeEnabled?: boolean;
 				};

@@ -2661,7 +2661,7 @@ describe("createRuntimeApi startTaskSession", () => {
 		mkdirSync(tempHome, { recursive: true });
 		const debugPaths = [
 			join(tempHome, ".cline", "data"),
-			join(tempHome, ".cline", "kanban"),
+			join(tempHome, ".kanban"),
 			join(tempHome, ".cline", "worktrees"),
 		];
 		for (const path of debugPaths) {
@@ -2717,7 +2717,7 @@ describe("createRuntimeApi startTaskSession", () => {
 		mkdirSync(tempHome, { recursive: true });
 		const debugPaths = [
 			join(tempHome, ".cline", "data"),
-			join(tempHome, ".cline", "kanban"),
+			join(tempHome, ".kanban"),
 			join(tempHome, ".cline", "worktrees"),
 		];
 		for (const path of debugPaths) {

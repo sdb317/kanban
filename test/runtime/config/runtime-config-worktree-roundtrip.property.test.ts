@@ -5,9 +5,9 @@ import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-	loadRuntimeConfig,
-	type RuntimeConfigUpdateInput,
-	updateRuntimeConfig,
+    loadRuntimeConfig,
+    type RuntimeConfigUpdateInput,
+    updateRuntimeConfig,
 } from "../../../src/config/runtime-config";
 import { resolveEffectiveWorktreesEnabled } from "../../../src/config/worktree-setting";
 import { runtimeConfigResponseSchema } from "../../../src/core/api-contract";
@@ -70,7 +70,7 @@ function expectedPersistedGlobal(requested: boolean | null): boolean | null {
  * `worktreesEnabled` key preserves the Req 1.9 omission behavior under test.
  */
 function seedGlobalConfig(homeDir: string): void {
-	const dir = join(homeDir, ".cline", "kanban");
+	const dir = join(homeDir, ".kanban");
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, "config.json"), JSON.stringify({ selectedAgentId: "cline" }), "utf8");
 }

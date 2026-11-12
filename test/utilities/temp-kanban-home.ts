@@ -20,7 +20,7 @@ export interface TempProject {
 
 /**
  * Points HOME, USERPROFILE, and os.homedir() at a fresh temp directory so the
- * runtime's Global_Config (`<home>/.cline/kanban/config.json`) is isolated per test.
+ * runtime's Global_Config (`<home>/.kanban/config.json`) is isolated per test.
  *
  * Note: `os.homedir()` reads HOME (POSIX) / USERPROFILE (Windows) on every call, so
  * the env overrides also cover modules that use the named `homedir` import, which a

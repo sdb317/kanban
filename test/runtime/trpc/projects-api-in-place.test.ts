@@ -10,10 +10,10 @@ import { createWorkspaceRegistry } from "../../../src/server/workspace-registry"
 import type { TerminalSessionManager } from "../../../src/terminal/session-manager";
 import { type CreateProjectsApiDependencies, createProjectsApi } from "../../../src/trpc/projects-api";
 import {
-	createTempProject,
-	type TempKanbanHome,
-	type TempProject,
-	withTempKanbanHome,
+    createTempProject,
+    type TempKanbanHome,
+    type TempProject,
+    withTempKanbanHome,
 } from "../../utilities/temp-kanban-home.js";
 
 function createProjectsApiDeps(serverCwd: string): CreateProjectsApiDependencies {
@@ -83,12 +83,12 @@ function createRuntimeConfigState(globalConfigPath: string, projectConfigPath: s
 }
 
 function createRegistryDeps(cwd: string): CreateWorkspaceRegistryDependencies {
-	const globalConfigPath = join(cwd, ".cline", "kanban", "config.json");
+	const globalConfigPath = join(cwd, ".kanban", "config.json");
 	return {
 		cwd,
 		loadGlobalRuntimeConfig: vi.fn(async () => createRuntimeConfigState(globalConfigPath, null)),
 		loadRuntimeConfig: vi.fn(async (projectPath: string) =>
-			createRuntimeConfigState(globalConfigPath, join(projectPath, ".cline", "kanban", "config.json")),
+			createRuntimeConfigState(globalConfigPath, join(projectPath, ".kanban", "config.json")),
 		),
 		hasGitRepository: vi.fn(() => false),
 		pathIsDirectory: vi.fn(async () => true),

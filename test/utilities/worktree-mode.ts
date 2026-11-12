@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 /** Mirrors `getRuntimeGlobalConfigPath()` in src/config/runtime-config.ts for an explicit home dir. */
 export function getGlobalConfigPathForHome(homeDir: string): string {
-	return join(homeDir, ".cline", "kanban", "config.json");
+	return join(homeDir, ".kanban", "config.json");
 }
 
 /**

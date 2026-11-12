@@ -108,16 +108,10 @@ export class AppMenu {
 		const helpMenu: Electron.MenuItemConstructorOptions = {
 			label: "Help",
 			submenu: [
-				{
-					label: "Kanban Documentation",
-					click: () => openExternalSafe("https://github.com/cline/kanban"),
-				},
-				{
-					label: "Report Issue",
-					click: () =>
-						openExternalSafe("https://github.com/cline/kanban/issues"),
-				},
-
+				// {
+				// 	label: "Kanban Documentation",
+				// 	click: () => openExternalSafe("https://github.com/"),
+				// },
 			],
 		};
 
